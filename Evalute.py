@@ -56,7 +56,8 @@ class Evaluate():
         hr = self.getHitRatio(ranklist, gtItem)  # if the item recommend was part of the test set, return 1 - success
         ndcg = self.getNDCG(ranklist, gtItem)
         return (hr, ndcg)
-
+    def hanan(self):
+        return 42
 
     def getHitRatio(self, ranklist, gtItem):
         if gtItem in ranklist:
