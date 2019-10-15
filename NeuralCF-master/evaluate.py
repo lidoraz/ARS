@@ -40,6 +40,7 @@ def evaluate_model(model, testRatings, testNegatives, K, num_thread):
     _K = K
         
     hits, ndcgs = [],[]
+    # not used
     if(num_thread > 1): # Multi-thread
         pool = multiprocessing.Pool(processes=num_thread)
         res = pool.map(eval_one_rating, range(len(_testRatings)))
@@ -59,29 +60,28 @@ def evaluate_model(model, testRatings, testNegatives, K, num_thread):
 def eval_one_rating(idx):
     rating = _testRatings[idx]
     items = _testNegatives[idx]
-    u = rating[0]
-    gtItem = rating[1]
-    items.append(gtItem)
+    u = rating[0] # user
+    gtItem = rating[1] # item rated
+    items.append(gtItem) # add the rated item to the list of items.
     # Get prediction scores
     map_item_score = {}
-    users = np.full(len(items), u, dtype = 'int32')
+    users = np.full(len(items), u, dtype = 'int32') # creates an array of size len(items) with values of u)
     predictions = _model.predict([users, np.array(items)], 
-                                 batch_size=100, verbose=0)
-    for i in range(len(items)):
+                                 batch_size=100, verbose=0) # given user i and set of items, return probability for each of #batch_size items
+    for i in range(len(items)): # construct an item->score map
         item = items[i]
         map_item_score[item] = predictions[i]
     items.pop()
     
     # Evaluate top rank list
-    ranklist = heapq.nlargest(_K, map_item_score, key=map_item_score.get)
-    hr = getHitRatio(ranklist, gtItem)
+    ranklist = heapq.nlargest(_K, map_item_score, key=map_item_score.get) # get 10 most probable items
+    hr = getHitRatio(ranklist, gtItem) # if the item recommend was part of the test set, return 1 - success
     ndcg = getNDCG(ranklist, gtItem)
     return (hr, ndcg)
 
 
 def getHitRatio(ranklist, gtItem):
-    for item in ranklist:
-        if item == gtItem:
+    if gtItem in ranklist:
             return 1
     return 0
 
