@@ -1,9 +1,11 @@
-mode = 0
+# mode = 0
+import os
+mode = int(os.environ['RUN_MODE'])
 path_prefix = ""
 print("Dataset path - Running mode:", mode)
 if mode == 0: # default pc work
     path_prefix = 'E:/DEEP_LEARNING/DATA_SETS/'
-elif mode == 1: # macbook
+elif mode == 1: # MacBook
     path_prefix = '/Users/lidora/Google Drive/Code/DATA_SETS_MOVIELENS'
 
 

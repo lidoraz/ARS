@@ -13,9 +13,8 @@ User table and item table represented with an embedding layer.
 Together their dot product has the approximate value to the user_item matrix itself.
 
 """
-
-
 checkpoint_cf_dir = "checkpoint_cf"  # "Directory name to save the checkpoints [checkpoint]")
+
 
 def plot_loss(history):
     from pylab import rcParams
@@ -39,6 +38,10 @@ class SimpleCF:
         self.model = None
 
         self.RATING_MATRIX = None
+        self.n_users = None
+        self.n_movies = None
+        self._userid2idx = None
+        self._itemid2idx = None
 
     def load_model(self, model_path='{}/CF.json'.format(checkpoint_cf_dir),
                    weights_path='{}/CF_w.h5'.format(checkpoint_cf_dir)):
@@ -59,6 +62,7 @@ class SimpleCF:
         self.n_movies = len(movies)
         df_dropped = self.df_removed_recents
 
+        # creates a id->idx mapping, both user and item
         self._userid2idx = {o: i for i, o in enumerate(users)}
         self._itemid2idx = {o: i for i, o in enumerate(movies)}
         
@@ -67,8 +71,6 @@ class SimpleCF:
         split = np.random.rand(len(df_dropped)) < 0.8
         train = df_dropped[split]
         valid = df_dropped[~split]
-
-
 
         print('n_users:', self.n_users, 'n_movies:', self.n_movies)
         print(train.shape, valid.shape)
@@ -92,13 +94,14 @@ class SimpleCF:
         self.model = model
         return model
 
-    def fit(self, train, valid, batch_size=128, epochs=25, verbose = 0 ):
+    def fit(self, train, valid, batch_size=128, epochs=25, verbose= 0 ):
 
         history = self.model.fit([train.user_id.values, train.movie_id.values], train.rating.values, batch_size=batch_size,
                                  epochs=epochs, validation_data=([valid.user_id.values, valid.movie_id.values], valid.rating.values),
                                  verbose=verbose)
         return history
-    def fit_once(self, train, valid, batch_size=128, verbose = 0 ):
+
+    def fit_once(self, train, valid, batch_size=128, verbose= 0):
 
         history = self.model.fit([train.user_id.values, train.movie_id.values], train.rating.values, batch_size=batch_size,
                                  epochs=1, validation_data=([valid.user_id.values, valid.movie_id.values], valid.rating.values),
@@ -140,7 +143,6 @@ class SimpleCF:
         for idx,(i, j) in enumerate(all_pairs):
             ratings_matrix[i,j] = res[idx]
         self.RATING_MATRIX = ratings_matrix
-
 
     def predict(self, users_items, batch_size, verbose):
         users = users_items[0]

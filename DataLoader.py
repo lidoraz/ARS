@@ -29,7 +29,6 @@ def get_from_dataset_name(dataset_name, convert_binary):
         raise ValueError('Not supported datasets')
 
 
-
 def get_movielens100k(convert_binary):
     df = pd.read_csv(CONFIG['MOVIELENS_100k_PATH'], delimiter='\t', header=None,
                      names=['user_id', 'movie_id', 'rating', 'timestamp'])
