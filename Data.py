@@ -4,42 +4,41 @@ from Constants import CONFIG
 # generate train test
 
 # evalute using metrics HR and NDCG
-import tensorflow as tf
+# import tensorflow as tf
 import pandas as pd
 import numpy as np
 
 
 import os
 import numpy as np
-import tensorflow as tf
-import tensorlayer as tl
+# import tensorflow as tf
+# import tensorlayer as tl
 
-import pandas as pd
-
-## enable debug logging
-tl.logging.set_verbosity(tl.logging.DEBUG)
+# import pandas as pd
 
 
 class Data():
-    def __init__(self, dataset, negative_set_size = 99, seed = None):
-        self.dataset = dataset
+    def __init__(self,
+                 df, user_item_matrix, total_users, total_movies
+                 , negative_set_size= 99, seed= None):
         self.negative_set_size = negative_set_size
+        self.df = df
+        self.user_item_matrix = user_item_matrix
+        self.total_users = total_users
+        self.total_movies = total_movies
         if not (seed is None):
             self.seed = seed
             np.random.seed(seed)
-    # def get_data(self, dataset = 'MOVIELENS_100k_PATH'):
-    #     self.dataset = dataset
-    #     if self.dataset == 'MOVIELENS_100k_PATH':
-    #         get_movielens100k
+
 
     """
     This function creates negative examples given a user name from a data frame
     For each user, it samples self.negative_set_size indexes, and adding a real rated sample
     In order to by evaluated using HR and NDCG metrics
     """
-    def create_testset(self, df: pd.DataFrame):
+    def create_testset(self):
         # select one most recent entry from each user, this will be the test
-        most_recent_entries = df.loc[df.groupby('user_id')['timestamp'].idxmax()]
+        most_recent_entries = self.df.loc[df.groupby('user_id')['timestamp'].idxmax()]
         assert len(most_recent_entries) == self.total_users # each user must have exactly one entry in most recent data
         users_list = most_recent_entries['user_id'].values
         rated_item_list = most_recent_entries['movie_id'].values
@@ -52,6 +51,12 @@ class Data():
     # def create_negatives(self, user_id, user_item_matrix, seed):
     #     pass
 
+    """
+    This function creates negative examples given a user name from a data frame
+    :input A user_id from the user_item_matrix (Pivot table created from user_id, item_id, rating)
+    :returns: A random list in size "self.negative_set_size" of item_ids that user_id did not interact with
+    
+    """
     def sample_indexes(self, user_id):
         current_user = self.user_item_matrix.iloc[user_id]
         unrated_current_user = current_user[current_user == 0].index # take unrated items as negative
@@ -72,23 +77,7 @@ class Data():
                     return i, j
 
 
-    def get_movielens100k(self):
-
-        df = pd.read_csv(CONFIG[self.dataset], delimiter='\t', header=None,
-                         names=['user_id', 'movie_id', 'rating', 'timestamp'])
-        util_df = pd.pivot_table(data=df, values='rating', index='user_id', columns='movie_id').fillna(0)
-
-        total_users = util_df.shape[0]
-        total_movies = util_df.shape[1]
-
-        self.df = df
-        self.user_item_matrix = util_df
-        self.total_users = total_users
-        self.total_items = total_movies
-        return df, util_df, total_users, total_movies
-        # w, h = find_max_multipicatns(total_movies)
-
-
+    #TODO: See where to put this
     def get_movielens_reshaped_GAN(self, util_df, total_users, batch_size, image_size=64):
         users_data = np.zeros((total_users, 64, 64), dtype=np.float32)
         for idx, user_row in enumerate(util_df.iterrows()):
@@ -113,7 +102,11 @@ class Data():
         ds = ds.prefetch(buffer_size=2)
         return ds, users_data.shape[0]
 
+from DataLoader import get_movielens100k
+
 if __name__ == '__main__':
-    data = Data(dataset= 'MOVIELENS_100k_PATH', seed= 42)
-    df, user_item_matrix, total_users, total_movies = data.get_movielens100k()
-    test_set = data.create_testset(df)
+    df, user_item_matrix, total_users, total_movies = get_movielens100k(convert_binary= False)
+
+    data = Data(df, user_item_matrix, total_users, total_movies,seed= 42)
+    test_set = data.create_testset()
+    print(test_set)

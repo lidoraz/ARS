@@ -1,16 +1,18 @@
-'''
-Based on Apr 15, 2016
+"""
+Based on Apr 15, 2016 Xiangnan He, et al. Fast Matrix Factorization for Online Recommendation with Implicit Feedback. SIGIR'16
 Evaluate the performance of Top-K recommendation:
     Protocol: leave-1-out evaluation
     Measures: Hit Ratio and NDCG
-    (more details are in: Xiangnan He, et al. Fast Matrix Factorization for Online Recommendation with Implicit Feedback. SIGIR'16)
-
-@author: hexiangnan
-'''
+"""
 import math
 import heapq  # for retrieval topK
 import numpy as np
 
+"""
+Evaluation class for MovieLens datasets
+Metrics are Hit Ratio and NDCG, based on 10 Most recommended items.
+Please note that batch size is 100 for the model.
+"""
 class Evaluate():
     def __init__(self, model, testRatings, testNegatives, K):
         self.model = model
@@ -25,9 +27,7 @@ class Evaluate():
         """
         hits, ndcgs = [], []
         # Single thread
-        def xrange(x):
-            return iter(range(x))
-        for idx in xrange(len(self.testRatings)):
+        for idx in range(len(self.testRatings)):
             (hr, ndcg) = self.eval_one_rating(idx)
             hits.append(hr)
             ndcgs.append(ndcg)
@@ -56,18 +56,14 @@ class Evaluate():
         hr = self.getHitRatio(ranklist, gtItem)  # if the item recommend was part of the test set, return 1 - success
         ndcg = self.getNDCG(ranklist, gtItem)
         return (hr, ndcg)
-    def hanan(self):
-        return 42
 
     def getHitRatio(self, ranklist, gtItem):
         if gtItem in ranklist:
             return 1
         return 0
 
-
     def getNDCG(self, ranklist, gtItem):
         for i in range(len(ranklist)):
-            item = ranklist[i]
-            if item == gtItem:
+            if ranklist[i] == gtItem:
                 return math.log(2) / math.log(i + 2)
         return 0

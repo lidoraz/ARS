@@ -1,0 +1,49 @@
+import pandas as pd
+from Constants import CONFIG
+
+"""
+Data Loader file, constist a convient loader for all MovieLens datasets.
+For each function:
+    Input:
+    convert_binary - When true, it will convert each rating ranged from 1-5 to 1.
+    The logic behind this is that we care only if the has user watched the movie or not.
+    Output:
+    A tuple of 4:
+    df - The rating data frame
+    user_item_matrix - A pivot table based on df, represents a relation between each user and movie
+    total_users - #users in df
+    total_movies - #movies in df 
+"""
+
+def get_movielens100k(convert_binary):
+    df = pd.read_csv(CONFIG['MOVIELENS_100k_PATH'], delimiter='\t', header=None,
+                     names=['user_id', 'movie_id', 'rating', 'timestamp'])
+    return _get_movielens(df, convert_binary)
+
+
+def get_movielens1m(convert_binary):
+    df = pd.read_csv(CONFIG['MOVIELENS_1M_PATH'], delimiter='::', header=None,
+                     names=['user_id', 'movie_id', 'rating', 'timestamp'])
+    return _get_movielens(df, convert_binary)
+
+
+def get_movielens10m(convert_binary):
+    df = pd.read_csv(CONFIG['MOVIELENS_10M_PATH'], delimiter='::', header=None,
+                     names=['user_id', 'movie_id', 'rating', 'timestamp'])
+    return _get_movielens(df, convert_binary)
+
+
+def get_movielens20m(convert_binary):
+    df = pd.read_csv(CONFIG['MOVIELENS_20M_PATH'], header=1,
+                     names=['user_id', 'movie_id', 'rating', 'timestamp'])
+    return _get_movielens(df, convert_binary)
+
+
+def _get_movielens(df, convert_binary):
+    if convert_binary:
+        df['rating'] = 1
+    user_item_matrix = pd.pivot_table(data=df, values='rating', index='user_id', columns='movie_id').fillna(0)
+    total_users = user_item_matrix.shape[0]
+    total_movies = user_item_matrix.shape[1]
+
+    return df, user_item_matrix, total_users, total_movies

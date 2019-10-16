@@ -1,0 +1,5 @@
+# exclude everything
+/BasedCode/UGAN/samples/*
+
+# exception to the rule
+!/BasedCode/UGAN/samples/.gitkeep.txt
