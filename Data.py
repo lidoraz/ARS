@@ -26,22 +26,35 @@ class Data():
         self.user_item_matrix = user_item_matrix
         self.total_users = total_users
         self.total_movies = total_movies
+        self.most_recent_entries = None
+
         if not (seed is None):
             self.seed = seed
             np.random.seed(seed)
 
-
+    """
+    Returns a dataframe without most recent entries, that are used for the test set
+    """
+    def filter_trainset(self):
+        self.most_recent_entries = self.df.loc[self.df.groupby('user_id')['timestamp'].idxmax()]
+        df_removed_recents = self.df.drop(self.most_recent_entries.index)
+        return df_removed_recents
+    #TODO: continue here
     """
     This function creates negative examples given a user name from a data frame
     For each user, it samples self.negative_set_size indexes, and adding a real rated sample
     In order to by evaluated using HR and NDCG metrics
+    :input A (0-1] range number for sampling a percentage of the users
     :return A dict with key='user_id', val=[neg,neg,...,pos]
             where pos is most recent rating by the user
     """
-    def create_testset(self):
+    def create_testset(self, percent=1):
         # select one most recent entry from each user, this will be the test
-        most_recent_entries = self.df.loc[self.df.groupby('user_id')['timestamp'].idxmax()]
-        assert len(most_recent_entries) == self.total_users # each user must have exactly one entry in most recent data
+        if self.most_recent_entries is None:
+            self.most_recent_entries = self.df.loc[self.df.groupby('user_id')['timestamp'].idxmax()]
+
+        assert len(self.most_recent_entries) == self.total_users # each user must have exactly one entry in most recent data
+        most_recent_entries = self.most_recent_entries.sample(frac=percent)
         users_list = most_recent_entries['user_id'].values
         rated_item_list = most_recent_entries['movie_id'].values
         test_set = {}
@@ -110,5 +123,6 @@ if __name__ == '__main__':
     df, user_item_matrix, total_users, total_movies = get_movielens100k(convert_binary= False)
 
     data = Data(df, user_item_matrix, total_users, total_movies,seed= 42)
+    train_set = data.create_trainset()
     test_set = data.create_testset()
     print(test_set)

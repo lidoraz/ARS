@@ -16,19 +16,20 @@ Please note that batch size is 100 for the model.
     Evaluate the performance (Hit_Ratio, NDCG) of top-k recommendation
     Return: score of each test rating.
 """
-
+from time import time
 
 def evaluate_model(model, test_set, k= 10):
-
     user_list = list(test_set.keys())
     negatives_list = list(test_set.values())
     hits, ndcgs = [], []
-    # Single thread
-    for idx in range(len(user_list)):
+    times = []
+    for idx in range(len(user_list)):     # Single thread
+        t0 = time()
         (hr, ndcg) = eval_one_rating(model, idx, user_list, negatives_list, k)
+        t1 = time()
+        times.append(t1-t0)
         hits.append(hr)
         ndcgs.append(ndcg)
-
     return np.array(hits).mean(), np.array(ndcgs).mean()
 
 

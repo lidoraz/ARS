@@ -3,3 +3,4 @@
 
 # exception to the rule
 !/BasedCode/UGAN/samples/.gitkeep.txt
+/Models/checkpoint_cf/
