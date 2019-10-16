@@ -35,10 +35,12 @@ class Data():
     This function creates negative examples given a user name from a data frame
     For each user, it samples self.negative_set_size indexes, and adding a real rated sample
     In order to by evaluated using HR and NDCG metrics
+    :return A dict with key='user_id', val=[neg,neg,...,pos]
+            where pos is most recent rating by the user
     """
     def create_testset(self):
         # select one most recent entry from each user, this will be the test
-        most_recent_entries = self.df.loc[df.groupby('user_id')['timestamp'].idxmax()]
+        most_recent_entries = self.df.loc[self.df.groupby('user_id')['timestamp'].idxmax()]
         assert len(most_recent_entries) == self.total_users # each user must have exactly one entry in most recent data
         users_list = most_recent_entries['user_id'].values
         rated_item_list = most_recent_entries['movie_id'].values

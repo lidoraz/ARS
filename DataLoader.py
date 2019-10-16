@@ -15,6 +15,21 @@ For each function:
     total_movies - #movies in df 
 """
 
+
+def get_from_dataset_name(dataset_name, convert_binary):
+    if dataset_name == 'movielens100k':
+        return get_movielens100k(convert_binary)
+    elif dataset_name == 'movielens1m':
+        return get_movielens1m(convert_binary)
+    elif dataset_name == 'movielens10m':
+        return get_movielens10m(convert_binary)
+    elif dataset_name == 'movielens20m':
+        return get_movielens20m(convert_binary)
+    else:
+        raise ValueError('Not supported datasets')
+
+
+
 def get_movielens100k(convert_binary):
     df = pd.read_csv(CONFIG['MOVIELENS_100k_PATH'], delimiter='\t', header=None,
                      names=['user_id', 'movie_id', 'rating', 'timestamp'])

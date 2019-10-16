@@ -4,6 +4,18 @@ Keras Implementation of Neural Matrix Factorization (NeuMF) recommender model in
 He Xiangnan et al. Neural Collaborative Filtering. In WWW 2017.  
 
 @author: Xiangnan He (xiangnanhe@gmail.com)
+
+
+Init: HR = 0.1023, NDCG = 0.0463
+Iteration 0 [124.0 s]: HR = 0.5974, NDCG = 0.3382, loss = 0.3223 [217.1 s]
+The best NeuMF model is saved to Pretrain/ml-1m_NeuMF_8_[64,32,16,8]_1571230994.h5
+Iteration 1 [122.6 s]: HR = 0.6356, NDCG = 0.3661, loss = 0.2758 [219.9 s]
+The best NeuMF model is saved to Pretrain/ml-1m_NeuMF_8_[64,32,16,8]_1571230994.h5
+Iteration 2 [132.0 s]: HR = 0.6465, NDCG = 0.3760, loss = 0.2652 [263.0 s]
+The best NeuMF model is saved to Pretrain/ml-1m_NeuMF_8_[64,32,16,8]_1571230994.h5
+
+
+
 '''
 import numpy as np
 
@@ -195,7 +207,7 @@ if __name__ == '__main__':
         model.compile(optimizer=Adam(lr=learning_rate), loss='binary_crossentropy')
     else:
         model.compile(optimizer=SGD(lr=learning_rate), loss='binary_crossentropy')
-    
+    print('got_model done')
     # Load pretrain model
     if mf_pretrain != '' and mlp_pretrain != '':
         gmf_model = GMF.get_model(num_users,num_items,mf_dim)
@@ -210,14 +222,15 @@ if __name__ == '__main__':
     hr, ndcg = np.array(hits).mean(), np.array(ndcgs).mean()
     print('Init: HR = %.4f, NDCG = %.4f' % (hr, ndcg))
     best_hr, best_ndcg, best_iter = hr, ndcg, -1
-    if args.out > 0:
-        model.save_weights(model_out_file, overwrite=True) 
+
 
     #todo added:
-    TRAINING = False
+    TRAINING = True
 
     if TRAINING:
-        # Training model
+        if args.out > 0:
+            model.save_weights(model_out_file, overwrite=True)
+            # Training model
         for epoch in range(num_epochs):
             t1 = time()
             # Generate training instances
@@ -239,8 +252,18 @@ if __name__ == '__main__':
                     best_hr, best_ndcg, best_iter = hr, ndcg, epoch
                     if args.out > 0:
                         model.save_weights(model_out_file, overwrite=True)
+                        print("The best NeuMF model is saved to %s" % (model_out_file))
+    else:
 
-        print("End. Best Iteration %d:  HR = %.4f, NDCG = %.4f. " %(best_iter, best_hr, best_ndcg))
-        if args.out > 0:
-            print("The best NeuMF model is saved to %s" %(model_out_file))
+        model_out_file = 'Pretrain/ml-1m_NeuMF_8_[64,32,16,8]_1571090710.h5'
+        print('Loading from:', model_out_file)
+        model.load_weights(model_out_file)
+        epoch = 0
+        t2 = time()
+        (hits, ndcgs) = evaluate_model(model, testRatings, testNegatives, topK, evaluation_threads)
+
+        hr, ndcg, loss = np.array(hits).mean(), np.array(ndcgs).mean(), 0
+        print('Iteration %d [%.1f s]: HR = %.4f, NDCG = %.4f, loss = %.4f [%.1f s]'
+              % (epoch, t2 - t1, hr, ndcg, loss, time() - t2))
+
 
