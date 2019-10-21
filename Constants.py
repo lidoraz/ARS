@@ -6,7 +6,7 @@ print("Dataset path - Running mode:", mode)
 if mode == 0: # default pc work
     path_prefix = 'E:/DEEP_LEARNING/DATA_SETS/'
 elif mode == 1: # MacBook
-    path_prefix = '/Users/lidora/Google Drive/Code/DATA_SETS_MOVIELENS'
+    path_prefix = '/Users/lidora/Google Drive/Code/DATA_SETS_MOVIELENS/'
 
 
 CONFIG = {

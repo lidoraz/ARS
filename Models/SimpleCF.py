@@ -32,9 +32,8 @@ def plot_loss(history):
 
 
 class SimpleCF:
-    def __init__(self, df, df_removed_recents):
-        self.df = df
-        self.df_removed_recents= df_removed_recents
+    def __init__(self):
+        self.df_removed_recents= None
         self.model = None
 
         self.RATING_MATRIX = None
@@ -53,18 +52,16 @@ class SimpleCF:
         self.model.load_weights(weights_path)
         print('loaded model from:', model_path, 'weights_path:', weights_path)
 
-    def model_preprocessing(self):
-        # tODO: see how to improve here
-        users = sorted(self.df.user_id.unique())
-        movies = sorted(self.df.movie_id.unique())
-
-        self.n_users = len(users)
-        self.n_movies = len(movies)
-        df_dropped = self.df_removed_recents
+    def model_preprocessing(self, df_removed_recents, sorted_unique_users, sorted_unique_movies):
+        # self.df_removed_recents = df_removed_recents
+        self.n_users = len(sorted_unique_users)
+        self.n_movies = len(sorted_unique_movies)
+        print('n_users:', self.n_users, 'n_movies:', self.n_movies)
+        df_dropped = df_removed_recents.copy() # fix for inplace change
 
         # creates a id->idx mapping, both user and item
-        self._userid2idx = {o: i for i, o in enumerate(users)}
-        self._itemid2idx = {o: i for i, o in enumerate(movies)}
+        self._userid2idx = {o: i for i, o in enumerate(sorted_unique_users)}
+        self._itemid2idx = {o: i for i, o in enumerate(sorted_unique_movies)}
         
         df_dropped['user_id'] = df_dropped['user_id'].apply(lambda x: self._userid2idx[x])
         df_dropped['movie_id'] = df_dropped['movie_id'].apply(lambda x: self._itemid2idx[x])
@@ -72,7 +69,6 @@ class SimpleCF:
         train = df_dropped[split]
         valid = df_dropped[~split]
 
-        print('n_users:', self.n_users, 'n_movies:', self.n_movies)
         print(train.shape, valid.shape)
         return train, valid, self.n_users, self.n_movies
 
@@ -88,7 +84,7 @@ class SimpleCF:
         sim = dot([user_vec, movie_vec], name='Simalarity-Dot-Product', axes=1)
         model = Model([user_input, movie_input], sim)
 
-        print(model.summary())
+        print('model has been set')
         model.compile(optimizer=Adam(lr=1e-4), loss='mse')
 
         self.model = model
@@ -165,7 +161,20 @@ class SimpleCF:
         #     # We use the user_id -> index in order to get the right place in the matrix for corresponding user
         #     predictions.append(self.RATING_MATRIX[self._userid2idx[users[idx]], self._itemid2idx[items[idx]]])
         # return np.array(predictions)
+    def add_users(self, users):
+        #users are in shape of #N_users * n_movies
+        #add users to _userid2idx
+        #call fit with (user, item, rating)
 
+        pass
+    def add_user(self, user):
+        new_user_id = max(self._userid2idx.values())
+        # self._userid2idx
+        if new_user_id in self._userid2idx:
+            raise ValueError('new_user_id already in dict')
+        self._userid2idx[new_user_id] = new_user_id +1
+
+        pass
 
 from DataLoader import *
 from Data import Data
@@ -177,20 +186,20 @@ def main():
     # An example for running the model and evaluating using leave-1-out and top-k using hit ratio and NCDG metrics
     convert_binary = True
     load_model = False
-    dataset_name = ml1m
+    dataset_name = ml100k
     testset_percentage = 0.2
 
-    epochs = 25
+    epochs = 2
     print('Started...')
 
     # df, user_item_matrix, total_users, total_movies = get_movielens100k(convert_binary)
     df, user_item_matrix, total_users, total_movies = get_from_dataset_name(dataset_name, convert_binary)
     data = Data(df, user_item_matrix, total_users, total_movies, seed=42)
-    df_removed_recents = data.filter_trainset() # TODO: make logic here simpler
+    df_removed_recents = data.filter_trainset()
     test_set = data.create_testset(percent= testset_percentage)
 
-    low_rank_cf_model = SimpleCF(df, df_removed_recents)
-    train, valid, n_users, n_movies = low_rank_cf_model.model_preprocessing()
+    low_rank_cf_model = SimpleCF()
+    train, valid, n_users, n_movies = low_rank_cf_model.model_preprocessing(df_removed_recents, data.get_user_id_list(), data.get_movie_id_list())
 
     if load_model:
         low_rank_cf_model.load_model()

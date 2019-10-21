@@ -31,7 +31,10 @@ class Data():
         if not (seed is None):
             self.seed = seed
             np.random.seed(seed)
-
+    def get_user_id_list(self):
+        return sorted(self.df['user_id'].unique())
+    def get_movie_id_list(self):
+        return sorted(self.df['movie_id'].unique())
     """
     Returns a dataframe without most recent entries, that are used for the test set
     """
