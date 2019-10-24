@@ -42,7 +42,8 @@ class Data():
         self.most_recent_entries = self.df.loc[self.df.groupby('user_id')['timestamp'].idxmax()]
         df_removed_recents = self.df.drop(self.most_recent_entries.index)
         return df_removed_recents
-    #TODO: continue here
+
+
     """
     This function creates negative examples given a user name from a data frame
     For each user, it samples self.negative_set_size indexes, and adding a real rated sample
