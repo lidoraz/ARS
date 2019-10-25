@@ -6,18 +6,19 @@ import numpy as np
 from numpy.random import RandomState
 from numpy.linalg import inv
 
-from dataset import load_movielens_ratings
-from dataset import build_user_item_matrix
-from ALS_optimize import ALS
-from ALS_optimize_origin import ALS_origin
-from evaluation import predict
-from evaluation import RMSE
-from compute_grad import compute_utility_grad
-from compute_grad import compute_grad
-
+from BoLiPoisoningAttack.dataset import load_movielens_ratings
+from BoLiPoisoningAttack.dataset import build_user_item_matrix
+from BoLiPoisoningAttack.ALS_optimize import ALS
+from BoLiPoisoningAttack.ALS_optimize_origin import ALS_origin
+from BoLiPoisoningAttack.evaluation import predict
+from BoLiPoisoningAttack.evaluation import RMSE
+from BoLiPoisoningAttack.compute_grad import compute_utility_grad
+from BoLiPoisoningAttack.compute_grad import compute_grad
+from Constants import *
 #ratings_file = '/media/wangfuyi15/F/Adversarial machine learning/ml-20m/ratings.csv'
 # ratings_file = 'F:/Adversarial machine learning/movielens-master/code/ratings-ml.csv'
-ratings_file = '/Users/lidora/Google Drive/Code/DATA_SETS_MOVIELENS/ml-100k/u.data'
+ratings_file = CONFIG['MOVIELENS_100k_PATH']
+# ratings_file = '/Users/lidora/Google Drive/Code/DATA_SETS_MOVIELENS/ml-100k/u.data'
 ratings = load_movielens_ratings(ratings_file)
 rand_state = RandomState(0)
 
@@ -35,7 +36,7 @@ train_pct: the proportion of train dataset
 '''
 lamda_u = 5e-2
 lamda_v = 5e-2
-alpha = 0.2
+alpha = 0.01
 B = 25
 n_iters = 10
 n_feature = 8
@@ -122,17 +123,21 @@ converge = 1e-5
 Lamda = 1
 last_rmse = None
 #optimize_model_origin()
+
+
+print(f'n_user={n_user}, n_item={n_item}, mal_user={mal_user}')
+
 for t in xrange(m_iters):
     t1 = time.time()
     #optimize_model()
     grad_total = compute_grad(n_user, n_item, mal_user, mal_ratings, train, user_features_, mal_user_features_, \
                         item_features_, lamda_v, n_feature, user_features_origin_, item_features_origin_)
-    mal_data = np.dot(mal_user_features_, item_features_)
+    mal_data = np.dot(mal_user_features_, item_features_.T)
     temp = mal_data
     mal_data +=  grad_total * s_t[t]
     mal_data[mal_data > Lamda] = Lamda
     mal_data[mal_data < - Lamda] = - Lamda
-    rmse = rmse(mal_data, temp)
+    rmse = RMSE(mal_data, temp)
     t2 = time.time()
     print("The %d th iteration \t time: %ds \t RMSE: %f " % (t + 1, t2 - t1, rmse))
     if last_rmse and abs(rmse - last_rmse) < converge:

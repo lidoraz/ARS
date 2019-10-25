@@ -147,6 +147,25 @@ def get_train_instances(train, num_negatives):
             labels.append(0)
     return user_input, item_input, labels
 
+# def generate_training_set(self, df_removed_recents, sorted_unique_users, sorted_unique_movies):
+#     # self.df_removed_recents = df_removed_recents
+#     self.n_users = len(sorted_unique_users)
+#     self.n_movies = len(sorted_unique_movies)
+#     print('n_users:', self.n_users, 'n_movies:', self.n_movies)
+#     df_dropped = df_removed_recents.copy()  # fix for inplace change
+#
+#     # creates a id->idx mapping, both user and item
+#     self._userid2idx = {o: i for i, o in enumerate(sorted_unique_users)}
+#     self._itemid2idx = {o: i for i, o in enumerate(sorted_unique_movies)}
+#
+#     df_dropped['user_id'] = df_dropped['user_id'].apply(lambda x: self._userid2idx[x])
+#     df_dropped['movie_id'] = df_dropped['movie_id'].apply(lambda x: self._itemid2idx[x])
+#     split = np.random.rand(len(df_dropped)) < 0.8
+#     train = df_dropped[split]
+#     valid = df_dropped[~split]
+#
+#         print(train.shape, valid.shape)
+#     return train, valid, self.n_users, self.n_movies
 
 
 from Evalute import evaluate_model
@@ -174,24 +193,26 @@ if __name__ == '__main__':
 
     # Loading data
     t1 = time()
-    df, user_item_matrix, total_users, total_movies = get_from_dataset_name('movielens1m')
-    data = Data(df, user_item_matrix, total_users, total_movies)
+    df = get_from_dataset_name('movielens1m', convert_binary=True)
+    data = Data(df)
     df_removed_recents = data.filter_trainset()
+    train = data.user_item_matrix_train
+    test_set = data.create_testset(percent=0.5)
+
+
 
     # dataset = Dataset(args.path + args.dataset)
     # train, testRatings, testNegatives = dataset.trainMatrix, dataset.testRatings, dataset.testNegatives
-    num_users, num_items = total_users, total_movies
+    num_users, num_items = data.total_users, data.total_movies
+    print(f'num_users: {num_users}, num_items: {num_items}')
     # print("Load data done [%.1f s]. #user=%d, #item=%d, #train=%d, #test=%d"
     #       %(time()-t1, num_users, num_items, train.nnz, len(testRatings)))
     
     # Build model
     model = get_model(num_users, num_items, mf_dim, layers, reg_layers, reg_mf)
     model.compile(optimizer=Adam(lr=learning_rate), loss='binary_crossentropy')
-    print('got_model done')
-        
-    # Init performance
-    testset_percentage = 0.5
-    test_set = data.create_testset(percent=testset_percentage)
+    print('get_model done')
+
     (hits, ndcgs) = evaluate_model(model, test_set)
     hr, ndcg = np.array(hits).mean(), np.array(ndcgs).mean()
     print('Init: HR = %.4f, NDCG = %.4f' % (hr, ndcg))
@@ -201,43 +222,43 @@ if __name__ == '__main__':
     #todo added:
     TRAINING = True
 
-    if TRAINING:
-        if args.out > 0:
-            model.save_weights(model_out_file, overwrite=True)
-            # Training model
-        for epoch in range(num_epochs):
-            t1 = time()
-            # Generate training instances
-            user_input, item_input, labels = get_train_instances(train, num_negatives)
+    # if TRAINING:
+    if args.out > 0:
+        model.save_weights(model_out_file, overwrite=True)
+        # Training model
+    for epoch in range(num_epochs):
+        t1 = time()
+        # Generate training instances
+        user_input, item_input, labels = get_train_instances(train, num_negatives)
 
-            # Training
-            hist = model.fit([np.array(user_input), np.array(item_input)], #input
-                             np.array(labels), # labels
-                             batch_size=batch_size, epochs=1, verbose=0, shuffle=True)
-            t2 = time()
-
-            # Evaluation
-            if epoch %verbose == 0:
-                (hits, ndcgs) = evaluate_model(model, testRatings, testNegatives, topK, evaluation_threads)
-                hr, ndcg, loss = np.array(hits).mean(), np.array(ndcgs).mean(), hist.history['loss'][0]
-                print('Iteration %d [%.1f s]: HR = %.4f, NDCG = %.4f, loss = %.4f [%.1f s]'
-                      % (epoch,  t2-t1, hr, ndcg, loss, time()-t2))
-                if hr > best_hr:
-                    best_hr, best_ndcg, best_iter = hr, ndcg, epoch
-                    if args.out > 0:
-                        model.save_weights(model_out_file, overwrite=True)
-                        print("The best NeuMF model is saved to %s" % (model_out_file))
-    else:
-
-        model_out_file = 'Pretrain/ml-1m_NeuMF_8_[64,32,16,8]_1571090710.h5'
-        print('Loading from:', model_out_file)
-        model.load_weights(model_out_file)
-        epoch = 0
+        # Training
+        hist = model.fit([np.array(user_input), np.array(item_input)], #input
+                         np.array(labels), # labels
+                         batch_size=batch_size, epochs=1, verbose=0, shuffle=True)
         t2 = time()
-        (hits, ndcgs) = evaluate_model(model, testRatings, testNegatives, topK, evaluation_threads)
 
-        hr, ndcg, loss = np.array(hits).mean(), np.array(ndcgs).mean(), 0
-        print('Iteration %d [%.1f s]: HR = %.4f, NDCG = %.4f, loss = %.4f [%.1f s]'
-              % (epoch, t2 - t1, hr, ndcg, loss, time() - t2))
+        # Evaluation
+        if epoch %verbose == 0:
+            (hits, ndcgs) = evaluate_model(model, test_set)
+            hr, ndcg, loss = np.array(hits).mean(), np.array(ndcgs).mean(), hist.history['loss'][0]
+            print('Iteration %d [%.1f s]: HR = %.4f, NDCG = %.4f, loss = %.4f [%.1f s]'
+                  % (epoch,  t2-t1, hr, ndcg, loss, time()-t2))
+            if hr > best_hr:
+                best_hr, best_ndcg, best_iter = hr, ndcg, epoch
+                if args.out > 0:
+                    model.save_weights(model_out_file, overwrite=True)
+                    print("The best NeuMF model is saved to %s" % (model_out_file))
+    # else:
+    #
+    #     model_out_file = 'Pretrain/ml-1m_NeuMF_8_[64,32,16,8]_1571090710.h5'
+    #     print('Loading from:', model_out_file)
+    #     model.load_weights(model_out_file)
+    #     epoch = 0
+    #     t2 = time()
+    #     (hits, ndcgs) = evaluate_model(model, testRatings, testNegatives, topK, evaluation_threads)
+    #
+    #     hr, ndcg, loss = np.array(hits).mean(), np.array(ndcgs).mean(), 0
+    #     print('Iteration %d [%.1f s]: HR = %.4f, NDCG = %.4f, loss = %.4f [%.1f s]'
+    #           % (epoch, t2 - t1, hr, ndcg, loss, time() - t2))
 
 

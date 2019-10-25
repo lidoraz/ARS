@@ -1,6 +1,6 @@
 from DataLoader import *
 from Data import Data
-from Evalute import evaluate_model, evaluate_shilling_model
+from Evalute import evaluate_model
 from Models.SimpleCF import SimpleCF
 ml1m = 'movielens1m'
 ml100k = 'movielens100k'
@@ -12,37 +12,18 @@ import numpy as np
 def init_model():  # trained / load
     pass
 
-
-
-def train_evalute_shilling_model(model, train, valid, test_set, shilling_items, epochs):
-    t0 = time()
-    mean_hr, mean_ndcg = evaluate_model(model, test_set)
-    mean_hr_shilling, mean_ndcg_shilling = evaluate_shilling_model(model, test_set, shilling_items)
-    print(f'Init: HR = {mean_hr:.4f}, NDCG = {mean_ndcg:.4f}, '
-          f'HR_s = {mean_hr_shilling:.4f}, NDCG_s = {mean_ndcg_shilling:.4f} Eval:[{time() - t0:.1f} s]')
-    for epoch in range(epochs):
-        t1 = time()
-        loss = model.fit_once(train, valid, batch_size=128, verbose=0)
-        t2 = time()
-        mean_hr, mean_ndcg = evaluate_model(model, test_set)
-        mean_hr_shilling, mean_ndcg_shilling = evaluate_shilling_model(model, test_set, shilling_items)
-        t3 = time()
-        print(f'Iteration: {epoch + 1} Fit:[{t2 - t1:.1f} s]: HR = {mean_hr:.4f}, NDCG = {mean_ndcg:.4f}, '
-              f'loss = {loss:.4f}, HR_s = {mean_hr_shilling:.4f}, NDCG_s = {mean_ndcg_shilling:.4f} Eval:[{t3 - t2:.1f} s]')
-            # low_rank_cf_model.save_model()
-    print('Total time: [%.1f s]' % (time() - t0))
-
-def train_evaluate_model(low_rank_cf_model, train_set, test_set, epochs):
+def train_evaluate_model(low_rank_cf_model, train, valid, test_set, epochs, n_users, n_movies):
 
     best_hr = 0
     best_ndcg = 0
+    low_rank_cf_model.set_model(n_users, n_movies, n_latent_factors=64)
     t0 = time()
     mean_hr, mean_ndcg = evaluate_model(low_rank_cf_model, test_set)
     print('Init: HR = %.4f, NDCG = %.4f, Eval:[%.1f s]'
           % (mean_hr, mean_ndcg, time() - t0))
     for epoch in range(epochs):
         t1 = time()
-        loss = low_rank_cf_model.fit_once(train_set, batch_size=128, verbose=0)
+        loss = low_rank_cf_model.fit_once(train, valid, batch_size=128, verbose=0)
         t2 = time()
         mean_hr, mean_ndcg = evaluate_model(low_rank_cf_model, test_set)
         t3 = time()
@@ -75,6 +56,12 @@ def fake_user_random(n_new_users, n_movies, convert_binary):
     return _generate_entries(new_users_entries, n_new_users, n_movies)
 
 
+def fake_user_zeros(n_new_users, n_movies):
+    print('fake_user_zeros()')
+    new_users_entries = np.zeros((n_new_users, n_movies))
+
+    return _generate_entries(new_users_entries, n_new_users, n_movies)
+
 def fake_user_selected_one_item(n_new_users, n_movies, convert_binary, n_random_movies=20):
     print('fake_user_selected_one_item()')
     new_users_entries = np.zeros((n_new_users, n_movies))  # assuems binary data
@@ -87,8 +74,7 @@ def fake_user_selected_one_item(n_new_users, n_movies, convert_binary, n_random_
             new_users_entries[:, random_movie_id] = 1
         else:
             new_users_entries[:, random_movie_id] = 5
-    new_entries, new_user_ids = _generate_entries(new_users_entries, n_new_users, n_movies)
-    return new_entries, new_user_ids, random_movie_ids
+    return _generate_entries(new_users_entries, n_new_users, n_movies)
 
 def fake_user_selected_randomitems(n_new_users, n_movies, convert_binary):
     pass
@@ -99,39 +85,50 @@ def main():
     # An example for running the model and evaluating using leave-1-out and top-k using hit ratio and NCDG metrics
     convert_binary = True
     load_model = True
-    dataset_name = ml1m
+    dataset_name = ml100k
     testset_percentage = 0.5
+    n_mal_users = 500
+
 
     epochs = 5
     print(f'Started... convert_binary={convert_binary}')
 
     # df, user_item_matrix, total_users, total_movies = get_movielens100k(convert_binary)
-    df = get_from_dataset_name(dataset_name, convert_binary)
+    df, user_item_matrix, total_users, total_movies = get_from_dataset_name(dataset_name, convert_binary)
+    data = Data(df, user_item_matrix, total_users, total_movies, seed=42)
+    df_removed_recents = data.filter_trainset()  # TODO: make logic here simpler
 
-    print('preparing data..')
-    data = Data(df, seed=42)
+    test_set = data.create_testset(percent=testset_percentage)
 
-    train_set, test_set, n_users, n_movies, userid2idx, itemid2idx = data.pre_processing()
-    print('REGULAR PHASE')
-    # model = SimpleCF()
-    # model.set_model(n_users, n_movies, userid2idx, itemid2idx, n_latent_factors=64)
-    # train_evaluate_model(model, train_set, test_set, epochs)
+    print('Baseline PHASE - added malicious users with no data')
+    new_entries, new_user_ids = fake_user_zeros(n_mal_users, total_movies)
+    df_added = df_removed_recents.append(new_entries)
+    new_user_id_list = np.array(data.get_user_id_list() + new_user_ids)
+    low_rank_cf_model = SimpleCF()
+
+    train, valid, n_users, n_movies = low_rank_cf_model.model_preprocessing(df_added, new_user_id_list, data.get_movie_id_list())
+    #Train and Evaluate
+    train_evaluate_model(low_rank_cf_model, train, valid, test_set, epochs, n_users, n_movies)
 
     print("ADVERSRIAL PHASE")
-    n_new_users = 400
-    # train_set, test_set, n_users, n_movies, userid2idx, itemid2idx = data.pre_processing()
-    # TODO: Side note for generating a random item: max(movie_id) > len(movie_ids)
-    new_entries, new_user_ids, shilling_items = fake_user_selected_one_item(n_new_users, n_movies, convert_binary, n_random_movies=50)
-    df_added = train_set.append(new_entries)
-    # new_user_id_list = np.array(data.get_user_id_list() + new_user_ids)
+    # get loss
+    low_rank_cf_model.model # get_layer()
 
-    data_aug = Data(df_added, seed=42)
-    model = SimpleCF()
-    train_set, test_set, n_users, n_movies, userid2idx, itemid2idx = data_aug.pre_processing()
-    model.set_model(n_users, n_movies, userid2idx, itemid2idx, n_latent_factors=64)
+
+    #TODO:
+    # Here magically we will learn how to add different rating to the mal users, such that it will increase the loss of the model
+    # Two problems: How do we generate input that increases the loss of the model
+    # 2nd: how do we make sure that after the model retrains, or atleast, retrains on our *NEW* data, it will achieve poor results?
+    # 3rd how do we minimize the amount of #mal_users, and #changed ratings.
+
+    # new_entries, new_user_ids = fake_user_selected_one_item(n_mal_users, total_movies, convert_binary)
+    # df_added = df_removed_recents.append(new_entries)
+    # new_user_id_list = np.array(data.get_user_id_list() + new_user_ids)
+    #
+    # low_rank_cf_model = SimpleCF()
     # train, valid, n_users, n_movies = low_rank_cf_model.model_preprocessing(df_added, new_user_id_list,
     #                                                                         data.get_movie_id_list())
-    train_evalute_shilling_model(model, train_set, test_set, shilling_items, epochs=epochs)
+    # train_evaluate_model(low_rank_cf_model, train, valid, test_set, epochs, n_users, n_movies)
 
 if __name__ == '__main__':
     main()

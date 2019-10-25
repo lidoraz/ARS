@@ -7,14 +7,14 @@ He Xiangnan et al. Neural Collaborative Filtering. In WWW 2017.
 @author: Xiangnan He (xiangnanhe@gmail.com)
 '''
 import numpy as np
-import keras
-from keras import backend as K
-from keras import initializers
-from keras.models import Sequential, Model, load_model, save_model
-from keras.layers.core import Dense, Lambda, Activation
-from keras.layers import Embedding, Input, Dense, Reshape, Flatten
-from keras.optimizers import Adagrad, Adam, SGD, RMSprop
-from keras.regularizers import l2
+import tensorflow.keras
+from tensorflow.keras import backend as K
+from tensorflow.keras import initializers
+from tensorflow.keras.models import Sequential, Model, load_model, save_model
+from tensorflow.keras.layers import Dense, Lambda, Activation
+from tensorflow.keras.layers import Embedding, Input, Dense, Reshape, Flatten
+from tensorflow.keras.optimizers import Adagrad, Adam, SGD, RMSprop
+from tensorflow.keras.regularizers import l2
 from Dataset import Dataset
 from evaluate import evaluate_model
 from time import time

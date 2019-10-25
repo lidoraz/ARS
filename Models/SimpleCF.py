@@ -52,28 +52,30 @@ class SimpleCF:
         self.model.load_weights(weights_path)
         print('loaded model from:', model_path, 'weights_path:', weights_path)
 
-    def model_preprocessing(self, df_removed_recents, sorted_unique_users, sorted_unique_movies):
-        # self.df_removed_recents = df_removed_recents
-        self.n_users = len(sorted_unique_users)
-        self.n_movies = len(sorted_unique_movies)
-        print('n_users:', self.n_users, 'n_movies:', self.n_movies)
-        df_dropped = df_removed_recents.copy() # fix for inplace change
-
-        # creates a id->idx mapping, both user and item
-        self._userid2idx = {o: i for i, o in enumerate(sorted_unique_users)}
-        self._itemid2idx = {o: i for i, o in enumerate(sorted_unique_movies)}
-        
-        df_dropped['user_id'] = df_dropped['user_id'].apply(lambda x: self._userid2idx[x])
-        df_dropped['movie_id'] = df_dropped['movie_id'].apply(lambda x: self._itemid2idx[x])
-        split = np.random.rand(len(df_dropped)) < 0.8
-        train = df_dropped[split]
-        valid = df_dropped[~split]
-
-        print(train.shape, valid.shape)
-        return train, valid, self.n_users, self.n_movies
+    # def model_preprocessing(self, df_removed_recents, sorted_unique_users, sorted_unique_movies):
+    #     # self.df_removed_recents = df_removed_recents
+    #     self.n_users = len(sorted_unique_users)
+    #     self.n_movies = len(sorted_unique_movies)
+    #     print('n_users:', self.n_users, 'n_movies:', self.n_movies)
+    #     df_dropped = df_removed_recents.copy() # fix for inplace change
+    #
+    #     # creates a id->idx mapping, both user and item
+    #     self._userid2idx = {o: i for i, o in enumerate(sorted_unique_users)}
+    #     self._itemid2idx = {o: i for i, o in enumerate(sorted_unique_movies)}
+    #
+    #     df_dropped['user_id'] = df_dropped['user_id'].apply(lambda x: self._userid2idx[x])
+    #     df_dropped['movie_id'] = df_dropped['movie_id'].apply(lambda x: self._itemid2idx[x])
+    #     split = np.random.rand(len(df_dropped)) < 0.8
+    #     train = df_dropped[split]
+    #     valid = df_dropped[~split]
+    #
+    #     print(train.shape, valid.shape)
+    #     return train, valid, self.n_users, self.n_movies
 
     # includes model.compile with Adam optimizer, loss is MSE
-    def set_model(self, n_users, n_movies, n_latent_factors=64):
+    def set_model(self, n_users, n_movies, userid2idx, itemid2idx, n_latent_factors=64):
+        self._userid2idx = userid2idx
+        self._itemid2idx = itemid2idx
         user_input = Input(shape=(1,), name='user_input', dtype='int64')
         user_embedding = Embedding(n_users, n_latent_factors, name='user_embedding')(user_input)
         user_vec = Flatten(name='FlattenUsers')(user_embedding)
@@ -90,17 +92,17 @@ class SimpleCF:
         self.model = model
         return model
 
-    def fit(self, train, valid, batch_size=128, epochs=25, verbose= 0 ):
+    def fit(self, train, batch_size=128, epochs=25, verbose= 0 ):
 
         history = self.model.fit([train.user_id.values, train.movie_id.values], train.rating.values, batch_size=batch_size,
-                                 epochs=epochs, validation_data=([valid.user_id.values, valid.movie_id.values], valid.rating.values),
+                                 epochs=epochs,
                                  verbose=verbose)
         return history
 
-    def fit_once(self, train, valid, batch_size=128, verbose= 0):
+    def fit_once(self, train, batch_size=128, verbose= 0):
 
         history = self.model.fit([train.user_id.values, train.movie_id.values], train.rating.values, batch_size=batch_size,
-                                 epochs=1, validation_data=([valid.user_id.values, valid.movie_id.values], valid.rating.values),
+                                 epochs=1,
                                  verbose=verbose)
         return history.history['loss'][0]
 

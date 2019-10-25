@@ -16,32 +16,61 @@ import numpy as np
 
 # import pandas as pd
 
-
+"""
+This class takes the loaded movie_lens DataFrame and generates:
+* Training set
+* Test Set
+* Utility functions user_id / movie_id to index
+"""
 class Data():
-    def __init__(self,
-                 df, user_item_matrix, total_users, total_movies
-                 , negative_set_size= 99, seed= None):
-        self.negative_set_size = negative_set_size
-        self.df = df
-        self.user_item_matrix = user_item_matrix
-        self.total_users = total_users
-        self.total_movies = total_movies
-        self.most_recent_entries = None
+    def __init__(self, df, negative_set_size=99, seed=None):
 
         if not (seed is None):
             self.seed = seed
             np.random.seed(seed)
+        self.negative_set_size = negative_set_size
+        self.df = df
+        self.user_item_matrix = pd.pivot_table(data=df, values='rating', index='user_id', columns='movie_id').fillna(0)
+        self.n_users = self.user_item_matrix.shape[0] # same as in neuMF
+        self.n_movies = self.user_item_matrix.shape[1]
+        self.user_item_matrix_train = None
+        self.most_recent_entries = None
+        self._userid2idx = None
+        self._itemid2idx = None
+
+    # split preprocessing to train and test.
+    def pre_processing(self, test_percent=1.0):
+        self._filter_trainset()
+        print('n_users:', self.n_users, 'n_movies:', self.n_movies)
+        df_dropped = self.df_removed_recents.copy()  # fix for inplace change
+
+        # creates a id->idx mapping, both user and item
+        self._userid2idx = {o: i for i, o in enumerate(self.df['user_id'].unique())}
+        self._itemid2idx = {o: i for i, o in enumerate(self.df['movie_id'].unique())}
+
+        df_dropped['user_id'] = df_dropped['user_id'].apply(lambda x: self._userid2idx[x])
+        df_dropped['movie_id'] = df_dropped['movie_id'].apply(lambda x: self._itemid2idx[x])
+        # split = np.random.rand(len(df_dropped)) < 0.8
+        # train = df_dropped[split]
+        # valid = df_dropped[~split]
+
+        # print(train.shape, valid.shape)
+        test_set = self._create_testset(test_percent)
+        return df_dropped, test_set, self.n_users, self.n_movies, self._userid2idx, self._itemid2idx
+
     def get_user_id_list(self):
         return sorted(self.df['user_id'].unique())
+
     def get_movie_id_list(self):
         return sorted(self.df['movie_id'].unique())
     """
     Returns a dataframe without most recent entries, that are used for the test set
     """
-    def filter_trainset(self):
+    def _filter_trainset(self):
         self.most_recent_entries = self.df.loc[self.df.groupby('user_id')['timestamp'].idxmax()]
-        df_removed_recents = self.df.drop(self.most_recent_entries.index)
-        return df_removed_recents
+        self.df_removed_recents = self.df.drop(self.most_recent_entries.index)
+        self.user_item_matrix_train = pd.pivot_table(data=self.df_removed_recents, values='rating', index='user_id', columns='movie_id').fillna(0)
+        return self.df_removed_recents, self.user_item_matrix_train
 
 
     """
@@ -52,12 +81,12 @@ class Data():
     :return A dict with key='user_id', val=[neg,neg,...,pos]
             where pos is most recent rating by the user
     """
-    def create_testset(self, percent=1):
+    def _create_testset(self, percent=1.0):
         # select one most recent entry from each user, this will be the test
         if self.most_recent_entries is None:
             self.most_recent_entries = self.df.loc[self.df.groupby('user_id')['timestamp'].idxmax()]
 
-        assert len(self.most_recent_entries) == self.total_users # each user must have exactly one entry in most recent data
+        # assert len(self.most_recent_entries) == self.n_users # each user must have exactly one entry in most recent data
         most_recent_entries = self.most_recent_entries.sample(frac=percent)
         users_list = most_recent_entries['user_id'].values
         rated_item_list = most_recent_entries['movie_id'].values
@@ -124,9 +153,10 @@ class Data():
 from DataLoader import get_movielens100k
 
 if __name__ == '__main__':
-    df, user_item_matrix, total_users, total_movies = get_movielens100k(convert_binary= False)
+    df = get_movielens100k(convert_binary= False)
 
-    data = Data(df, user_item_matrix, total_users, total_movies,seed= 42)
-    train_set = data.create_trainset()
-    test_set = data.create_testset()
-    print(test_set)
+    data = Data(df)
+
+    train_set, test_set = data.preprocessing(test_percent=0.5)
+    for k,v in test_set.items():
+        print(k,v)

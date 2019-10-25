@@ -1,7 +1,7 @@
 import random
 import numpy as np
 from six.moves import xrange
-from dataset import build_user_item_matrix
+from BoLiPoisoningAttack.dataset import build_user_item_matrix
 from numpy.linalg import inv
 #compute the gradient of the hyrid utility function
 def compute_utility_grad(n_user, n_item, train, user_features_, item_features_,user_features_origin_, item_features_origin_, \

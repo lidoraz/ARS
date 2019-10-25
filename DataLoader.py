@@ -56,8 +56,6 @@ def get_movielens20m(convert_binary):
 def _get_movielens(df, convert_binary):
     if convert_binary:
         df['rating'] = 1
-    user_item_matrix = pd.pivot_table(data=df, values='rating', index='user_id', columns='movie_id').fillna(0)
-    total_users = user_item_matrix.shape[0]
-    total_movies = user_item_matrix.shape[1]
 
-    return df, user_item_matrix, total_users, total_movies
+
+    return df

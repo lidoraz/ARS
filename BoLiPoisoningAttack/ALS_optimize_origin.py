@@ -1,7 +1,7 @@
 import numpy as np
 from six.moves import xrange
 from numpy.linalg import inv
-from dataset import build_user_item_matrix
+from BoLiPoisoningAttack.dataset import build_user_item_matrix
 
 def _update_user_feature(n_user, ratings_csr_, n_feature, lamda_u, mean_rating_, user_features_, item_features_):
     '''

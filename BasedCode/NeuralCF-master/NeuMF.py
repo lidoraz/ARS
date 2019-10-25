@@ -187,7 +187,7 @@ if __name__ == '__main__':
     topK = 10
     evaluation_threads = 1#mp.cpu_count()
     print("NeuMF arguments: %s " %(args))
-    model_out_file = 'Pretrain/%s_NeuMF_%d_%s_%d.h5' %(args.dataset, mf_dim, args.layers, time())
+    model_out_file = 'Pretrain/%s_NeuMF_%d_%s_%d.h5' % (args.dataset, mf_dim, args.layers, time())
 
     # Loading data
     t1 = time()
