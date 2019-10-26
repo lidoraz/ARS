@@ -235,7 +235,7 @@ if __name__ == '__main__':
             t1 = time()
             # Generate training instances
             user_input, item_input, labels = get_train_instances(train, num_negatives)
-
+            print(f'get_train_instances done at: {time()- t1 :.1f s}')
             # Training
             hist = model.fit([np.array(user_input), np.array(item_input)], #input
                              np.array(labels), # labels

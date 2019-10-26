@@ -129,6 +129,7 @@ def get_model(num_users, num_items, mf_dim=10, layers=[10], reg_layers=[0], reg_
     
     return model
 
+# for every user, in generates 1 correct input, and num_negatives incorrect inputs
 def get_train_instances(train, num_negatives):
     user_input, item_input, labels = [],[],[]
     num_users = train.shape[0]
@@ -238,7 +239,7 @@ if __name__ == '__main__':
         t2 = time()
 
         # Evaluation
-        if epoch %verbose == 0:
+        if epoch % verbose == 0:
             (hits, ndcgs) = evaluate_model(model, test_set)
             hr, ndcg, loss = np.array(hits).mean(), np.array(ndcgs).mean(), hist.history['loss'][0]
             print('Iteration %d [%.1f s]: HR = %.4f, NDCG = %.4f, loss = %.4f [%.1f s]'

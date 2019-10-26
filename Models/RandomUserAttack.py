@@ -128,7 +128,7 @@ def main():
     data_aug = Data(df_added, seed=42)
     model = SimpleCF()
     train_set, test_set, n_users, n_movies, userid2idx, itemid2idx = data_aug.pre_processing()
-    model.set_model(n_users, n_movies, userid2idx, itemid2idx, n_latent_factors=64)
+    model.set_model(n_users, n_movies, n_latent_factors=64)
     # train, valid, n_users, n_movies = low_rank_cf_model.model_preprocessing(df_added, new_user_id_list,
     #                                                                         data.get_movie_id_list())
     train_evalute_shilling_model(model, train_set, test_set, shilling_items, epochs=epochs)
