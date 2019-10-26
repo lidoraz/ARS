@@ -52,16 +52,34 @@ class Data():
         pickle.dump(negative_items, open(negative_items_path, "wb"))
         return negative_items
 
+
+    # def get_train_instances_shilling(self, df_fake):
+    #
+    #     movie_list = list(range(self.n_movies))
+    #     for index, row in df_fake.iterrows():
+    #         user = row['user_id']
+    #         user_input.append(user)
+    #         item_input.append(row['movie_id'])
+    #         labels.append(row['rating'])
+    #         negative_input_items_pool = np.setdiff1d(a, movie_list)
+    #         negative_input_items = np.random.choice(negative_items[user], num_negatives)
+    #         for neg_item in negative_input_items:
+    #             user_input.append(user)
+    #             item_input.append(neg_item)
+    #             labels.append(0)
+    #     training_set = (np.array(user_input), np.array(item_input), np.array(labels))
+    #     return training_set
     # for every user, in generates 1 correct input, and num_negatives incorrect inputs
-    def get_train_instances(self, num_negatives, percent = 1.0):
+    def get_train_instances(self, df, num_negatives, percent = 1.0, save_load=False):
         user_input, item_input, labels = [], [], []
-        df = self.df_reindexed_removed_recents
-        rating_type = 'binary_rating' if self.binary else 'multi_rating'
-        negative_items_path = os.path.join(os.path.curdir,os.path.join('negative_items_dump', f'ml_{len(self.df)}_{rating_type}.p'))
-        if os.path.exists(negative_items_path):
-            negative_items = pickle.load(open( negative_items_path, 'rb'))
-        else:
-            negative_items = self._create_negative_items(df, negative_items_path)
+        negative_items = {}
+        if save_load:
+            rating_type = 'binary_rating' if self.binary else 'multi_rating'
+            negative_items_path = os.path.join(os.path.curdir,os.path.join('negative_items_dump', f'ml_{len(self.df)}_{rating_type}.p'))
+            if os.path.exists(negative_items_path):
+                negative_items = pickle.load(open( negative_items_path, 'rb'))
+            else:
+                negative_items = self._create_negative_items(df, negative_items_path)
         # sample from each user_id % samples.
         df = df.groupby('user_id').apply(lambda s: s.sample(frac=percent))
 
@@ -80,7 +98,7 @@ class Data():
         return training_set
 
     def recreate_trainingset(self, train_precent=1.0 ):
-        self.get_train_instances(num_negatives=4, percent=train_precent)
+        self.get_train_instances(self.df_reindexed_removed_recents, num_negatives=4, percent=train_precent, save_load=True)
 
     # split preprocessing to train and test.
     def pre_processing(self, test_percent=1.0, train_precent= 1.0):
@@ -92,10 +110,9 @@ class Data():
         df_reindexed = self.df.copy()
         df_reindexed['user_id'] = df_reindexed['user_id'].apply(lambda x: self._userid2idx[x])
         df_reindexed['movie_id'] = df_reindexed['movie_id'].apply(lambda x: self._itemid2idx[x])
-        self.df_reindexed = df_reindexed
 
-        most_recent_entries = self._filter_trainset()
-        training_set = self.get_train_instances(num_negatives=4, percent=train_precent)
+        df_reindexed_removed_recents, most_recent_entries = self._filter_trainset(df_reindexed)
+        training_set = self.get_train_instances(df_reindexed_removed_recents, num_negatives=4, percent=train_precent, save_load=True)
         test_set = self._create_testset(most_recent_entries, test_percent)
 
         return training_set, test_set, self.n_users, self.n_movies
@@ -108,13 +125,12 @@ class Data():
     """
     Returns a dataframe without most recent entries, that are used for the test set
     """
-    def _filter_trainset(self):
-        most_recent_entries = self.df_reindexed.loc[self.df_reindexed.groupby('user_id')['timestamp'].idxmax()]
-        self.df_reindexed_removed_recents = self.df_reindexed.drop(most_recent_entries.index)
-        self.user_item_matrix_train = pd.pivot_table(data=self.df_reindexed_removed_recents, values='rating', index='user_id', columns='movie_id').fillna(0)
+    def _filter_trainset(self, df_reindexed):
+        most_recent_entries = df_reindexed.loc[df_reindexed.groupby('user_id')['timestamp'].idxmax()]
+        df_reindexed_removed_recents = df_reindexed.drop(most_recent_entries.index)
+        self.user_item_matrix_train = pd.pivot_table(data=df_reindexed_removed_recents, values='rating', index='user_id', columns='movie_id').fillna(0)
         # return most_recent_entries, self.df_reindexed_removed_recents, self.user_item_matrix_train
-
-        return most_recent_entries
+        return df_reindexed_removed_recents, most_recent_entries
 
     """
     This function creates negative examples given a user name from a data frame

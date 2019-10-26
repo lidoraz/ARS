@@ -74,6 +74,11 @@ def fake_user_random(n_new_users, n_movies, convert_binary):
 
     return _generate_entries(new_users_entries, n_new_users, n_movies)
 
+def fake_user_zeros(n_new_users, n_movies):
+    print('fake_user_zeros()')
+    new_users_entries = np.zeros((n_new_users, n_movies))
+
+    return _generate_entries(new_users_entries, n_new_users, n_movies)
 
 def fake_user_selected_one_item(n_new_users, n_movies, convert_binary, n_random_movies=20):
     print('fake_user_selected_one_item()')
