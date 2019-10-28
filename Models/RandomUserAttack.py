@@ -12,7 +12,8 @@ import matplotlib.pyplot as plt
 def init_model():  # trained / load
     pass
 
-
+# TODO: Much better to se CPU here instead of GPU, probably because the model is simple,
+#  Predict takes 1.5s instead of 44s
 
 def train_evalute_shilling_model(model, train, valid, test_set, shilling_items, epochs):
     t0 = time()
@@ -139,7 +140,7 @@ def plot(HR_list, NDCG_list):
     plt.plot(epochs, HR_list)
     plt.xlabel('Epoch')
     plt.ylabel('Hit Rate')
-    plt.title(f'Adv Attack: Metrics drop over {epochs}')
+    plt.title(f'Adv Attack: Metrics drop over {(len(HR_list))} epochs')
     ax2 = plt.twinx()
     ax2.set_ylabel('NDCG', color='tab:orange')
     ax2.plot(epochs, NDCG_list, color='orange')

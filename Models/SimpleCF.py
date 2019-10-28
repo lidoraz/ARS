@@ -124,19 +124,21 @@ class SimpleCF:
     This function returns the apporximated user_movie to rating matrix 
     Calc may take time. (88s for movieLens 1m)
     """
+    # TODO: fix this
     def create_ratings_matrix(self):
-        self._userid2idx.values()
-        self._itemid2idx.values()
-        import itertools
-        all_pairs = list(itertools.product(self._userid2idx.values(), self._itemid2idx.values()))
-        list1, list2 = zip(*all_pairs)
-        list1 = np.array(list1).reshape(-1,)
-        list2 = np.array(list1).reshape(-1, )
-        ratings_matrix = np.zeros((self.n_users, self.n_movies))
-        res = self.model.predict([list1, list2])
-        for idx,(i, j) in enumerate(all_pairs):
-            ratings_matrix[i,j] = res[idx]
-        self.RATING_MATRIX = ratings_matrix
+        raise NotImplemented
+        # self._userid2idx.values()
+        # self._itemid2idx.values()
+        # import itertools
+        # all_pairs = list(itertools.product(self._userid2idx.values(), self._itemid2idx.values()))
+        # list1, list2 = zip(*all_pairs)
+        # list1 = np.array(list1).reshape(-1,)
+        # list2 = np.array(list1).reshape(-1, )
+        # ratings_matrix = np.zeros((self.n_users, self.n_movies))
+        # res = self.model.predict([list1, list2])
+        # for idx,(i, j) in enumerate(all_pairs):
+        #     ratings_matrix[i,j] = res[idx]
+        # self.RATING_MATRIX = ratings_matrix
 
     def predict(self, users_items, batch_size, verbose):
         users = users_items[0]
@@ -159,20 +161,6 @@ class SimpleCF:
         #     # We use the user_id -> index in order to get the right place in the matrix for corresponding user
         #     predictions.append(self.RATING_MATRIX[self._userid2idx[users[idx]], self._itemid2idx[items[idx]]])
         # return np.array(predictions)
-    def add_users(self, users):
-        #users are in shape of #N_users * n_movies
-        #add users to _userid2idx
-        #call fit with (user, item, rating)
-
-        pass
-    def add_user(self, user):
-        new_user_id = max(self._userid2idx.values())
-        # self._userid2idx
-        if new_user_id in self._userid2idx:
-            raise ValueError('new_user_id already in dict')
-        self._userid2idx[new_user_id] = new_user_id +1
-
-        pass
 
 from DataLoader import *
 from Data import Data
@@ -188,7 +176,7 @@ def main():
     epochs = 10
     print('Started...')
 
-    df = get_movielens100k(convert_binary=False)
+    df = get_movielens1m(convert_binary=False)
 
     data = Data(df, seed=42)
     t0 = time()

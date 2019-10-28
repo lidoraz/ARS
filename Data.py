@@ -1,12 +1,6 @@
-# loader
-from Constants import CONFIG
-
 # generate train test
 
-# evalute using metrics HR and NDCG
 # import tensorflow as tf
-import pandas as pd
-import numpy as np
 
 
 import os
@@ -52,7 +46,12 @@ class Data():
         pickle.dump(negative_items, open(negative_items_path, "wb"))
         return negative_items
 
-
+    @staticmethod
+    def shuffle_training(traning_set):
+        shuffled = np.c_[traning_set[0], traning_set[1], traning_set[2]]
+        np.random.shuffle(shuffled)
+        traning_set = (shuffled[:, 0], shuffled[:, 1], shuffled[:, 2])
+        return traning_set
     # def get_train_instances_shilling(self, df_fake):
     #
     #     movie_list = list(range(self.n_movies))
@@ -183,31 +182,31 @@ class Data():
                 if i * j == num:
                     return i, j
 
-
-    #TODO: See where to put this
-    def get_movielens_reshaped_GAN(self, util_df, total_users, batch_size, image_size=64):
-        users_data = np.zeros((total_users, 64, 64), dtype=np.float32)
-        for idx, user_row in enumerate(util_df.iterrows()):
-            # user_row = np.zeros((64*64))
-            user_row_values = user_row[1].values
-            leading_zeros = image_size ** 2 - len(user_row_values)
-            user_row_values_scaled = np.append(user_row_values, [0] * leading_zeros)
-            users_data[idx] = user_row_values_scaled.reshape((image_size, image_size))
-
-        # normalize data
-        users_data = (users_data - 2.5) / 2.5
-
-        users_data = np.expand_dims(users_data, 4)
-
-        train_ds = tf.data.Dataset.from_tensor_slices(users_data)
-        # train_ds = tf.data.Dataset.from_generator(generator_train, output_types=tf.string)
-        ds = train_ds.shuffle(buffer_size=4096)
-        # ds = ds.shard(num_shards=hvd.size(), index=hvd.rank())
-        # ds = ds.repeat(n_epoch)
-        # ds = ds.map(_map_fn, num_parallel_calls=4)
-        ds = ds.batch(batch_size)
-        ds = ds.prefetch(buffer_size=2)
-        return ds, users_data.shape[0]
+    #
+    #
+    # def get_movielens_reshaped_GAN(self, util_df, total_users, batch_size, image_size=64):
+    #     users_data = np.zeros((total_users, 64, 64), dtype=np.float32)
+    #     for idx, user_row in enumerate(util_df.iterrows()):
+    #         # user_row = np.zeros((64*64))
+    #         user_row_values = user_row[1].values
+    #         leading_zeros = image_size ** 2 - len(user_row_values)
+    #         user_row_values_scaled = np.append(user_row_values, [0] * leading_zeros)
+    #         users_data[idx] = user_row_values_scaled.reshape((image_size, image_size))
+    #
+    #     # normalize data
+    #     users_data = (users_data - 2.5) / 2.5
+    #
+    #     users_data = np.expand_dims(users_data, 4)
+    #
+    #     train_ds = tf.data.Dataset.from_tensor_slices(users_data)
+    #     # train_ds = tf.data.Dataset.from_generator(generator_train, output_types=tf.string)
+    #     ds = train_ds.shuffle(buffer_size=4096)
+    #     # ds = ds.shard(num_shards=hvd.size(), index=hvd.rank())
+    #     # ds = ds.repeat(n_epoch)
+    #     # ds = ds.map(_map_fn, num_parallel_calls=4)
+    #     ds = ds.batch(batch_size)
+    #     ds = ds.prefetch(buffer_size=2)
+    #     return ds, users_data.shape[0]
 
 from DataLoader import *
 from time import time

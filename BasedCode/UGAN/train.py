@@ -6,8 +6,42 @@ from glob import glob
 from data import get_celebA, get_movielens100k
 from model import get_generator, get_discriminator
 
+
+
+# def get_model_memory_usage(batch_size, model):
+#     import numpy as np
+#     from tensorflow.keras import backend as K
+#     # from tensorflow.keras import back
+#     # tf.keras.backend
+#     shapes_mem_count = 0
+#     internal_model_mem_count = 0
+#     for l in model.layers:
+#         layer_type = l.__class__.__name__
+#         if layer_type == 'Model':
+#             internal_model_mem_count += get_model_memory_usage(batch_size, l)
+#         single_layer_mem = 1
+#         for s in l.output_shape:
+#             if s is None:
+#                 continue
+#             single_layer_mem *= s
+#         shapes_mem_count += single_layer_mem
+#
+#     trainable_count = np.sum([K.count_params(p) for p in set(model.trainable_weights)])
+#     non_trainable_count = np.sum([K.count_params(p) for p in set(model.non_trainable_weights)])
+#
+#     number_size = 4.0
+#     if K.floatx() == 'float16':
+#          number_size = 2.0
+#     if K.floatx() == 'float64':
+#          number_size = 8.0
+#
+#     total_memory = number_size*(batch_size*shapes_mem_count + trainable_count + non_trainable_count)
+#     gbytes = np.round(total_memory / (1024.0 ** 3), 3) + internal_model_mem_count
+#     return gbytes
+
+
 class FLAGS(object):
-    def __init__(self, n_epoch=25, z_dim=100, lr=0.0002, beta1=0.5, batch_size=64,
+    def __init__(self, n_epoch=25, z_dim=100, lr=0.0002, beta1=0.5, batch_size=128,
                  output_width=64, output_height= 64 , sample_size=64, c_dim=3, save_every_epoch=1):
         self.n_epoch = n_epoch # "Epoch to train [25]"
         self.z_dim = z_dim # "Num of noise value]"
@@ -24,7 +58,7 @@ class FLAGS(object):
         self.sample_dir = "samples" # "Directory name to save the image samples [samples]")
         assert np.sqrt(self.sample_size) % 1 == 0., 'Flag `sample_size` needs to be a perfect square'
 
-flags = FLAGS(c_dim=1)
+flags = FLAGS()
 num_tiles = int(np.sqrt(flags.sample_size))
 
 tl.files.exists_or_mkdir(flags.checkpoint_dir) # save model
@@ -32,14 +66,15 @@ tl.files.exists_or_mkdir(flags.sample_dir) # save generated image
 
 def train():
 
-    DATASET = 'MOVIE_LENS'
-    # DATASET = 'CELEBA'
+    # DATASET = 'MOVIE_LENS'
+    DATASET = 'CELEBA'
 
 
     print("DATASET:", DATASET)
     if DATASET == 'CELEBA':
         images, num_examples = get_celebA((64, 64), flags.batch_size)
         b_w = False
+        flags.c_dim = 3
     elif DATASET == 'MOVIE_LENS':
         images, num_examples = get_movielens100k(flags.batch_size)
         b_w = True
@@ -48,6 +83,9 @@ def train():
         # flags.output_width = images._flat_shapes[0][2]
     else:
         raise(ValueError('invalid DATAET param'))
+    from pprint import pprint
+    # print(flags.__dict__)
+    pprint(vars(flags))
 
     G = get_generator([None, flags.z_dim], b_w= b_w)
     D = get_discriminator([None, flags.output_width, flags.output_height, flags.c_dim])
@@ -59,17 +97,19 @@ def train():
     g_optimizer = tf.optimizers.Adam(flags.lr, beta_1=flags.beta1)
 
     n_step_epoch = int(num_examples // flags.batch_size)
-    
+
     # Z = tf.distributions.Normal(0., 1.)
     for epoch in range(flags.n_epoch):
+        # z = np.random.normal(loc=0.0, scale=1.0, size=[flags.batch_size, flags.z_dim]).astype(np.float32)
         for step, batch_images in enumerate(images):
             if batch_images.shape[0] != flags.batch_size: # if the remaining data in this epoch < batch_size
                 break
             step_time = time.time()
             with tf.GradientTape(persistent=True) as tape:
-                # z = Z.sample([flags.batch_size, flags.z_dim]) 
+                # z = Z.sample([flags.batch_size, flags.z_dim])
                 z = np.random.normal(loc=0.0, scale=1.0, size=[flags.batch_size, flags.z_dim]).astype(np.float32)
-                d_logits = D(G(z))
+                g_z = G(z)
+                d_logits = D(g_z)
                 d2_logits = D(batch_images)
                 # discriminator: real images are labelled as 1
                 d_loss_real = tl.cost.sigmoid_cross_entropy(d2_logits, tf.ones_like(d2_logits), name='dreal')
@@ -88,14 +128,14 @@ def train():
 
             print("Epoch: [{}/{}] [{}/{}] took: {:.3f}, d_loss: {:.5f}, g_loss: {:.5f}".format(epoch, \
                   flags.n_epoch, step, n_step_epoch, time.time()-step_time, d_loss, g_loss))
-        
+
         if np.mod(epoch, flags.save_every_epoch) == 0:
             G.save_weights('{}/G.npz'.format(flags.checkpoint_dir), format='npz')
             D.save_weights('{}/D.npz'.format(flags.checkpoint_dir), format='npz')
             G.eval()
             result = G(z)
             G.train()
-            tl.visualize.save_images(result.numpy(), [num_tiles, num_tiles], '{}/train_{:02d}.png'.format(flags.sample_dir, epoch))
+            tl.visualize.save_images(result.numpy()[:flags.sample_size], [num_tiles, num_tiles], '{}/train_{:02d}.png'.format(flags.sample_dir, epoch))
 
 if __name__ == '__main__':
     train()

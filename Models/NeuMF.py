@@ -130,23 +130,23 @@ def get_model(num_users, num_items, mf_dim=10, layers=[10], reg_layers=[0], reg_
     return model
 
 # for every user, in generates 1 correct input, and num_negatives incorrect inputs
-def get_train_instances(train, num_negatives):
-    user_input, item_input, labels = [],[],[]
-    num_users = train.shape[0]
-    for (u, i) in train.keys():
-        # positive instance
-        user_input.append(u)
-        item_input.append(i)
-        labels.append(1)
-        # negative instances
-        for t in range(num_negatives):
-            j = np.random.randint(num_items)
-            while (u, j) in train: #train.has_key((u, j)):
-                j = np.random.randint(num_items)
-            user_input.append(u)
-            item_input.append(j)
-            labels.append(0)
-    return user_input, item_input, labels
+# def get_train_instances(train, num_negatives):
+#     user_input, item_input, labels = [],[],[]
+#     num_users = train.shape[0]
+#     for (u, i) in train.keys():
+#         # positive instance
+#         user_input.append(u)
+#         item_input.append(i)
+#         labels.append(1)
+#         # negative instances
+#         for t in range(num_negatives):
+#             j = np.random.randint(num_items)
+#             while (u, j) in train: #train.has_key((u, j)):
+#                 j = np.random.randint(num_items)
+#             user_input.append(u)
+#             item_input.append(j)
+#             labels.append(0)
+#     return user_input, item_input, labels
 
 # def generate_training_set(self, df_removed_recents, sorted_unique_users, sorted_unique_movies):
 #     # self.df_removed_recents = df_removed_recents
@@ -195,22 +195,14 @@ if __name__ == '__main__':
     # Loading data
     t1 = time()
     df = get_from_dataset_name('movielens1m', convert_binary=True)
-    data = Data(df)
-    df_removed_recents = data.filter_trainset()
-    train = data.user_item_matrix_train
-    test_set = data.create_testset(percent=0.5)
-
-
-
-    # dataset = Dataset(args.path + args.dataset)
-    # train, testRatings, testNegatives = dataset.trainMatrix, dataset.testRatings, dataset.testNegatives
-    num_users, num_items = data.total_users, data.total_movies
-    print(f'num_users: {num_users}, num_items: {num_items}')
+    data = Data(df, seed=42)
+    train_set, test_set, n_users, n_movies = data.pre_processing()
+    print(f'num_users: {n_users}, num_items: {n_movies}')
     # print("Load data done [%.1f s]. #user=%d, #item=%d, #train=%d, #test=%d"
     #       %(time()-t1, num_users, num_items, train.nnz, len(testRatings)))
     
     # Build model
-    model = get_model(num_users, num_items, mf_dim, layers, reg_layers, reg_mf)
+    model = get_model(n_users, n_movies, mf_dim, layers, reg_layers, reg_mf)
     model.compile(optimizer=Adam(lr=learning_rate), loss='binary_crossentropy')
     print('get_model done')
 
@@ -219,36 +211,22 @@ if __name__ == '__main__':
     print('Init: HR = %.4f, NDCG = %.4f' % (hr, ndcg))
     best_hr, best_ndcg, best_iter = hr, ndcg, -1
 
-
-    #todo added:
-    TRAINING = True
-
-    # if TRAINING:
     if args.out > 0:
         model.save_weights(model_out_file, overwrite=True)
         # Training model
     for epoch in range(num_epochs):
         t1 = time()
-        # Generate training instances
-        user_input, item_input, labels = get_train_instances(train, num_negatives)
+        (user_input, item_input, labels) = train_set
 
         # Training
         hist = model.fit([np.array(user_input), np.array(item_input)], #input
                          np.array(labels), # labels
                          batch_size=batch_size, epochs=1, verbose=0, shuffle=True)
         t2 = time()
-
-        # Evaluation
-        if epoch % verbose == 0:
-            (hits, ndcgs) = evaluate_model(model, test_set)
-            hr, ndcg, loss = np.array(hits).mean(), np.array(ndcgs).mean(), hist.history['loss'][0]
-            print('Iteration %d [%.1f s]: HR = %.4f, NDCG = %.4f, loss = %.4f [%.1f s]'
-                  % (epoch,  t2-t1, hr, ndcg, loss, time()-t2))
-            if hr > best_hr:
-                best_hr, best_ndcg, best_iter = hr, ndcg, epoch
-                if args.out > 0:
-                    model.save_weights(model_out_file, overwrite=True)
-                    print("The best NeuMF model is saved to %s" % (model_out_file))
+        mean_hr, mean_ndcg = evaluate_model(model, test_set)
+        print('Iteration: %d Fit:[%.1f s]: HR = %.4f, NDCG = %.4f, loss = %.4f, Eval:[%.1f s]'
+              % (epoch+1, t2 - t1, mean_hr, mean_ndcg, hist.history['loss'][0], time() - t2))
+        train_set = data.shuffle_training(train_set)
     # else:
     #
     #     model_out_file = 'Pretrain/ml-1m_NeuMF_8_[64,32,16,8]_1571090710.h5'
