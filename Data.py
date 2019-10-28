@@ -5,6 +5,8 @@
 
 import os
 import numpy as np
+from tqdm import tqdm
+
 # import tensorflow as tf
 # import tensorlayer as tl
 
@@ -18,33 +20,15 @@ This class takes the loaded movie_lens DataFrame and generates:
 * Utility functions user_id / movie_id to index
 """
 class Data():
-    def __init__(self, df, negative_set_size=99, seed=None):
+    def __init__(self, negative_set_size=99, seed=None):
 
         if not (seed is None):
             self.seed = seed
             np.random.seed(seed)
         self.negative_set_size = negative_set_size
-        self.df = df
-        self.binary = True if len(df['rating'].unique()) == 2 else False
-        self.df_reindexed = None
-        self.user_item_matrix = pd.pivot_table(data=df, values='rating', index='user_id', columns='movie_id').fillna(0)
-        self.n_users = self.user_item_matrix.shape[0] # same as in neuMF
-        self.n_movies = self.user_item_matrix.shape[1]
-        self.user_item_matrix_train = None
         self.most_recent_entries = None
         self._userid2idx = None
         self._itemid2idx = None
-
-    def _create_negative_items(self, df, negative_items_path):
-        print(f"could not find '{negative_items_path}', creating one")
-        negative_items = {}
-        users = sorted(df['user_id'].unique())
-        for idx, user in enumerate(users):
-            if idx % 100 == 0:
-                print(idx)
-            negative_items[user] = df[df['user_id'] != user]['movie_id'].unique()
-        pickle.dump(negative_items, open(negative_items_path, "wb"))
-        return negative_items
 
     @staticmethod
     def shuffle_training(traning_set):
@@ -52,37 +36,21 @@ class Data():
         np.random.shuffle(shuffled)
         traning_set = (shuffled[:, 0], shuffled[:, 1], shuffled[:, 2])
         return traning_set
-    # def get_train_instances_shilling(self, df_fake):
-    #
-    #     movie_list = list(range(self.n_movies))
-    #     for index, row in df_fake.iterrows():
-    #         user = row['user_id']
-    #         user_input.append(user)
-    #         item_input.append(row['movie_id'])
-    #         labels.append(row['rating'])
-    #         negative_input_items_pool = np.setdiff1d(a, movie_list)
-    #         negative_input_items = np.random.choice(negative_items[user], num_negatives)
-    #         for neg_item in negative_input_items:
-    #             user_input.append(user)
-    #             item_input.append(neg_item)
-    #             labels.append(0)
-    #     training_set = (np.array(user_input), np.array(item_input), np.array(labels))
-    #     return training_set
-    # for every user, in generates 1 correct input, and num_negatives incorrect inputs
-    def get_train_instances(self, df, num_negatives, percent = 1.0, save_load=False):
-        user_input, item_input, labels = [], [], []
-        negative_items = {}
-        if save_load:
-            rating_type = 'binary_rating' if self.binary else 'multi_rating'
-            negative_items_path = os.path.join(os.path.curdir,os.path.join('negative_items_dump', f'ml_{len(self.df)}_{rating_type}.p'))
-            if os.path.exists(negative_items_path):
-                negative_items = pickle.load(open( negative_items_path, 'rb'))
-            else:
-                negative_items = self._create_negative_items(df, negative_items_path)
-        # sample from each user_id % samples.
-        df = df.groupby('user_id').apply(lambda s: s.sample(frac=percent))
 
-        for index, row in df.iterrows():
+    def _create_negative_items(self, df, negative_items_path):
+        print(f"Could not find '{negative_items_path}', creating...")
+        negative_items = {}
+        users = list(sorted(df['user_id'].unique()))
+        for idx, user in tqdm(enumerate(users), total=len(users)):
+            negative_items[user] = df[df['user_id'] != user]['movie_id'].unique()
+        pickle.dump(negative_items, open(negative_items_path, "wb"))
+        return negative_items
+
+    def _create_training_instances(self, df, negative_items, num_negatives, training_instances_path, percent):
+        print(f"Could not find '{training_instances_path}', creating...")
+        df = df.groupby('user_id').apply(lambda s: s.sample(frac=percent))
+        user_input, item_input, labels = [], [], []
+        for index, row in tqdm(df.iterrows(), total=df.shape[0]):
             user = row['user_id']
             user_input.append(user)
             item_input.append(row['movie_id'])
@@ -92,43 +60,55 @@ class Data():
                 user_input.append(user)
                 item_input.append(neg_item)
                 labels.append(0)
-        training_set = (np.array(user_input), np.array(item_input), np.array(labels))
-        print('get_train_instances done')
-        return training_set
 
-    def recreate_trainingset(self, train_precent=1.0 ):
-        self.get_train_instances(self.df_reindexed_removed_recents, num_negatives=4, percent=train_precent, save_load=True)
+        training_set = (np.array(user_input), np.array(item_input), np.array(labels))
+        pickle.dump(training_set, open(training_instances_path, "wb"))
+        return training_set
+    # for every user, in generates 1 correct input, and num_negatives incorrect inputs
+    def get_train_instances(self, df, num_negatives, percent = 1.0):
+        rating_type = 'binary_rating' if self.binary else 'multi_rating'
+        train_dir_path = os.path.join(os.path.curdir, 'training_dump')
+        negative_items_path = os.path.join(train_dir_path, f'ml_neg_{self.n_rows_df}_{rating_type}.p')
+        training_instances_path = os.path.join(train_dir_path, f'ml_train_{self.n_rows_df}_{rating_type}.p')
+        if os.path.exists(training_instances_path):
+            return pickle.load(open(training_instances_path, 'rb'))
+        else:
+            if os.path.exists(negative_items_path):
+                negative_items = pickle.load(open(negative_items_path, 'rb'))
+            else:
+                negative_items = self._create_negative_items(df, negative_items_path)
+            return self._create_training_instances(df, negative_items, num_negatives, training_instances_path, percent)
 
     # split preprocessing to train and test.
-    def pre_processing(self, test_percent=1.0, train_precent= 1.0):
-        print('n_users:', self.n_users, 'n_movies:', self.n_movies)
+    def pre_processing(self, df, test_percent=1.0, train_precent= 1.0):
+
+        self.binary = True if len(df['rating'].unique()) == 1 else False
+        self.n_rows_df = len(df)
         # creates a id->idx mapping, both user and item
         # reindex the dataframe in order to avoid problems with missing movie_ids
-        self._userid2idx = {o: i for i, o in enumerate(self.df['user_id'].unique())}
-        self._itemid2idx = {o: i for i, o in enumerate(self.df['movie_id'].unique())}
-        df_reindexed = self.df.copy()
+        self._userid2idx = {o: i for i, o in enumerate(df['user_id'].unique())}
+        self._itemid2idx = {o: i for i, o in enumerate(df['movie_id'].unique())}
+        df_reindexed = df.copy()
         df_reindexed['user_id'] = df_reindexed['user_id'].apply(lambda x: self._userid2idx[x])
         df_reindexed['movie_id'] = df_reindexed['movie_id'].apply(lambda x: self._itemid2idx[x])
-
+        self.n_users = df_reindexed['user_id'].max()
+        self.n_movies = df_reindexed['movie_id'].max()
+        print('n_users:', self.n_users, 'n_movies:', self.n_movies)
+        # TODO: look where to put this
+        self.user_item_matrix_reindexed = pd.pivot_table(data=df_reindexed, values='rating', index='user_id', columns='movie_id').fillna(0)
         df_reindexed_removed_recents, most_recent_entries = self._filter_trainset(df_reindexed)
-        training_set = self.get_train_instances(df_reindexed_removed_recents, num_negatives=4, percent=train_precent, save_load=True)
-        test_set = self._create_testset(most_recent_entries, test_percent)
+        training_set = self.get_train_instances(df_reindexed_removed_recents, num_negatives=4, percent=train_precent)
+        test_set = self._create_testset(df_reindexed, most_recent_entries, test_percent)
 
         return training_set, test_set, self.n_users, self.n_movies
 
-    def get_user_id_list(self):
-        return sorted(self.df['user_id'].unique())
-
-    def get_movie_id_list(self):
-        return sorted(self.df['movie_id'].unique())
     """
     Returns a dataframe without most recent entries, that are used for the test set
     """
     def _filter_trainset(self, df_reindexed):
         most_recent_entries = df_reindexed.loc[df_reindexed.groupby('user_id')['timestamp'].idxmax()]
+        assert len(most_recent_entries) == self.n_users + 1  # each user must have exactly one entry in most recent data; +1 because we count users from 0 instead of 1.
         df_reindexed_removed_recents = df_reindexed.drop(most_recent_entries.index)
-        self.user_item_matrix_train = pd.pivot_table(data=df_reindexed_removed_recents, values='rating', index='user_id', columns='movie_id').fillna(0)
-        # return most_recent_entries, self.df_reindexed_removed_recents, self.user_item_matrix_train
         return df_reindexed_removed_recents, most_recent_entries
 
     """
@@ -139,12 +119,8 @@ class Data():
     :return A dict with key='user_id', val=[neg,neg,...,pos]
             where pos is most recent rating by the user
     """
-    def _create_testset(self, most_recent_entries, percent=1.0):
+    def _create_testset(self, df, most_recent_entries, percent=1.0):
         # select one most recent entry from each user, this will be the test
-        if self.most_recent_entries is None:
-            self.most_recent_entries = self.df.loc[self.df.groupby('user_id')['timestamp'].idxmax()]
-
-        # assert len(self.most_recent_entries) == self.n_users # each user must have exactly one entry in most recent data
         most_recent_entries = most_recent_entries.sample(frac=percent)
         users_list = most_recent_entries['user_id'].values
         rated_item_list = most_recent_entries['movie_id'].values
@@ -164,7 +140,7 @@ class Data():
     
     """
     def sample_indexes(self, user_id):
-        current_user = self.user_item_matrix.iloc[user_id]
+        current_user = self.user_item_matrix_reindexed.iloc[user_id]
         unrated_current_user = current_user[current_user == 0].index # take unrated items as negative
         sampled_indexes = np.random.choice(unrated_current_user, self.negative_set_size)
         return list(sampled_indexes)
@@ -213,9 +189,9 @@ from time import time
 if __name__ == '__main__':
     df = get_movielens1m(convert_binary= False)
 
-    data = Data(df, seed=42)
+    data = Data(seed=42)
     t0 = time()
-    training_set, test_set, n_users, n_movies = data.pre_processing(test_percent=0.5, train_precent=1)
+    training_set, test_set, n_users, n_movies = data.pre_processing(df, test_percent=0.5, train_precent=1)
     print(f'data.pre_processing done. T:{time() - t0}')
     user_input, item_input, labels = training_set
     print(user_input[:10], item_input[:10], labels[:10])

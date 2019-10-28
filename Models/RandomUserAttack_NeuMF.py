@@ -15,44 +15,44 @@ def init_model():  # trained / load
 # TODO: Much better to se CPU here instead of GPU, probably because the model is simple,
 #  Predict takes 1.5s instead of 44s
 
-def train_evalute_shilling_model(model, train, valid, test_set, shilling_items, epochs):
-    t0 = time()
-    mean_hr, mean_ndcg = evaluate_model(model, test_set)
-    mean_hr_shilling, mean_ndcg_shilling = evaluate_shilling_model(model, test_set, shilling_items)
-    print(f'Init: HR = {mean_hr:.4f}, NDCG = {mean_ndcg:.4f}, '
-          f'HR_s = {mean_hr_shilling:.4f}, NDCG_s = {mean_ndcg_shilling:.4f} Eval:[{time() - t0:.1f} s]')
-    for epoch in range(epochs):
-        t1 = time()
-        loss = model.fit_once(train, valid, batch_size=128, verbose=0)
-        t2 = time()
-        mean_hr, mean_ndcg = evaluate_model(model, test_set)
-        mean_hr_shilling, mean_ndcg_shilling = evaluate_shilling_model(model, test_set, shilling_items)
-        t3 = time()
-        print(f'Iteration: {epoch + 1} Fit:[{t2 - t1:.1f} s]: HR = {mean_hr:.4f}, NDCG = {mean_ndcg:.4f}, '
-              f'loss = {loss:.4f}, HR_s = {mean_hr_shilling:.4f}, NDCG_s = {mean_ndcg_shilling:.4f} Eval:[{t3 - t2:.1f} s]')
-            # low_rank_cf_model.save_model()
-    print('Total time: [%.1f s]' % (time() - t0))
-
-
-# def evalute_model(model, test_set):
-
-
-def train_evaluate_model(low_rank_cf_model, train_set, test_set, epochs):
+# def train_evalute_shilling_model(model, train, valid, test_set, shilling_items, epochs):
+#     t0 = time()
+#     mean_hr, mean_ndcg = evaluate_model(model, test_set)
+#     mean_hr_shilling, mean_ndcg_shilling = evaluate_shilling_model(model, test_set, shilling_items)
+#     print(f'Init: HR = {mean_hr:.4f}, NDCG = {mean_ndcg:.4f}, '
+#           f'HR_s = {mean_hr_shilling:.4f}, NDCG_s = {mean_ndcg_shilling:.4f} Eval:[{time() - t0:.1f} s]')
+#     for epoch in range(epochs):
+#         t1 = time()
+#         loss = model.fit_once(train, valid, batch_size=128, verbose=0)
+#         t2 = time()
+#         mean_hr, mean_ndcg = evaluate_model(model, test_set)
+#         mean_hr_shilling, mean_ndcg_shilling = evaluate_shilling_model(model, test_set, shilling_items)
+#         t3 = time()
+#         print(f'Iteration: {epoch + 1} Fit:[{t2 - t1:.1f} s]: HR = {mean_hr:.4f}, NDCG = {mean_ndcg:.4f}, '
+#               f'loss = {loss:.4f}, HR_s = {mean_hr_shilling:.4f}, NDCG_s = {mean_ndcg_shilling:.4f} Eval:[{t3 - t2:.1f} s]')
+#             # low_rank_cf_model.save_model()
+#     print('Total time: [%.1f s]' % (time() - t0))
+#
+#
+# # def evalute_model(model, test_set):
+#
+#
+def train_evaluate_model(model, train_set, test_set, epochs):
 
     best_hr = 0
     best_ndcg = 0
     t0 = time()
-    mean_hr, mean_ndcg = evaluate_model(low_rank_cf_model, test_set)
+    mean_hr, mean_ndcg = evaluate_model(model, test_set)
     print('Init: HR = %.4f, NDCG = %.4f, Eval:[%.1f s]'
           % (mean_hr, mean_ndcg, time() - t0))
     for epoch in range(epochs):
         t1 = time()
-        loss = low_rank_cf_model.fit_once(train_set, batch_size=128, verbose=0)
+        loss = model.fit(train_set, batch_size=128, verbose=0)
         t2 = time()
-        mean_hr, mean_ndcg = evaluate_model(low_rank_cf_model, test_set)
+        mean_hr, mean_ndcg = evaluate_model(model, test_set)
         t3 = time()
         print('Iteration: %d Fit:[%.1f s]: HR = %.4f, NDCG = %.4f, loss = %.4f, Eval:[%.1f s]'
-              % (epoch + 1, t2 - t1, mean_hr, mean_ndcg, loss, t3 - t2))
+              % (epoch + 1, t2 - t1, mean_hr, mean_ndcg, loss.history['loss'][0], t3 - t2))
         if mean_hr > best_hr and mean_ndcg > best_ndcg:
             best_hr = mean_hr
             best_ndcg = mean_ndcg
@@ -146,6 +146,9 @@ def plot(HR_list, NDCG_list):
     ax2.plot(epochs, NDCG_list, color='orange')
     plt.show()
 
+from Models.NeuMF import *
+
+
 def main():
     # init_model()
     # An example for running the model and evaluating using leave-1-out and top-k using hit ratio and NCDG metrics
@@ -170,8 +173,18 @@ def main():
                                                                             n_random_movies=50)
     n_users_w_mal = n_users + n_mal_users
     print('REGULAR PHASE')
-    model = SimpleCF()
-    model.set_model(n_users_w_mal, n_movies, n_latent_factors=64)
+    # model = SimpleCF()
+
+    mf_dim = 8
+    layers = [64,32,16,8]
+    reg_layers = [0,0,0,0]
+    reg_mf = 0
+    learning_rate = 0.001
+
+
+    model = get_model(n_users_w_mal, n_movies, mf_dim, layers, reg_layers, reg_mf)
+    model.compile(optimizer=Adam(lr=learning_rate), loss='binary_crossentropy')
+    # model.set_model(n_users_w_mal, n_movies, n_latent_factors=64)
     train_evaluate_model(model, train_set, test_set, epochs)
 
     print("ADVERSRIAL PHASE")
@@ -179,7 +192,11 @@ def main():
     ndcg_list = []
     mal_epochs = 150
     for epoch in range(mal_epochs):
-        model.fit_once(mal_training)
+        (user_input, item_input, labels) = train_set
+        hist = model.fit([user_input, item_input],  # input
+                         labels,  # labels
+                         batch_size=batch_size, epochs=1, verbose=0, shuffle=False)
+        model.fit(mal_training)
         mean_hr, mean_ndcg = evaluate_model(model, test_set)
         print(f'mal_it: {epoch} HR: {mean_hr:.4f}, NDCG: {mean_ndcg:.4f}')
 

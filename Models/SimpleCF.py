@@ -171,16 +171,18 @@ def main():
     # An example for running the model and evaluating using leave-1-out and top-k using hit ratio and NCDG metrics
     convert_binary = True
     load_model = False
+    save_model = False
     testset_percentage = 0.2
 
     epochs = 10
     print('Started...')
 
-    df = get_movielens1m(convert_binary=False)
+    df = get_movielens100k(convert_binary=False)
+    # df = get_movielens1m(convert_binary=False)
 
-    data = Data(df, seed=42)
+    data = Data(seed=42)
     t0 = time()
-    training_set, test_set, n_users, n_movies = data.pre_processing(test_percent=0.5, train_precent=1)
+    training_set, test_set, n_users, n_movies = data.pre_processing(df, test_percent=0.5, train_precent=1)
 
     low_rank_cf_model = SimpleCF()
 
@@ -202,7 +204,8 @@ def main():
         if mean_hr > best_hr and mean_ndcg > best_ndcg:
             best_hr = mean_hr
             best_ndcg = mean_ndcg
-            low_rank_cf_model.save_model()
+            if save_model:
+                low_rank_cf_model.save_model()
     print('Total time: [%.1f s]' % (time()- t0))
 
 

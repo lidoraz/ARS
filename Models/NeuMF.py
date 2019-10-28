@@ -83,6 +83,8 @@ def init_normal(shape, name=None):
     return initializers.normal(shape, scale=0.01, name=name)
 
 def get_model(num_users, num_items, mf_dim=10, layers=[10], reg_layers=[0], reg_mf=0):
+    num_users = num_users + 1
+    num_items = num_items + 1
     assert len(layers) == len(reg_layers)
     num_layer = len(layers) #Number of layers in the MLP
     # Input variables
@@ -171,6 +173,7 @@ def get_model(num_users, num_items, mf_dim=10, layers=[10], reg_layers=[0], reg_
 
 from Evalute import evaluate_model
 
+from DataLoader import *
 
 if __name__ == '__main__':
     args = parse_args()
@@ -188,15 +191,16 @@ if __name__ == '__main__':
     mlp_pretrain = args.mlp_pretrain
             
     topK = 10
-    evaluation_threads = 1#mp.cpu_count()
     print("NeuMF arguments: %s " %(args))
     model_out_file = 'Pretrain/%s_NeuMF_%d_%s_%d.h5' %(args.dataset, mf_dim, args.layers, time())
 
     # Loading data
     t1 = time()
-    df = get_from_dataset_name('movielens1m', convert_binary=True)
-    data = Data(df, seed=42)
-    train_set, test_set, n_users, n_movies = data.pre_processing()
+    df = get_movielens1m(convert_binary=True)
+    # df = get_movielens1m(convert_binary=True)
+    # df = get_from_dataset_name('movielens1m', convert_binary=True)
+    data = Data(seed=42)
+    train_set, test_set, n_users, n_movies = data.pre_processing(df)
     print(f'num_users: {n_users}, num_items: {n_movies}')
     # print("Load data done [%.1f s]. #user=%d, #item=%d, #train=%d, #test=%d"
     #       %(time()-t1, num_users, num_items, train.nnz, len(testRatings)))
@@ -211,8 +215,8 @@ if __name__ == '__main__':
     print('Init: HR = %.4f, NDCG = %.4f' % (hr, ndcg))
     best_hr, best_ndcg, best_iter = hr, ndcg, -1
 
-    if args.out > 0:
-        model.save_weights(model_out_file, overwrite=True)
+    # if args.out > 0:
+    #     model.save_weights(model_out_file, overwrite=True)
         # Training model
     for epoch in range(num_epochs):
         t1 = time()
