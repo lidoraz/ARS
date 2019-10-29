@@ -7,6 +7,8 @@ if mode == 0: # default pc work
     path_prefix = 'E:/DEEP_LEARNING/DATA_SETS/'
 elif mode == 1: # MacBook
     path_prefix = '/Users/lidora/Google Drive/Code/DATA_SETS_MOVIELENS/'
+elif mode == 2:
+    path_prefix = '/media/lidor/48688C7C688C6B10/evo_backup/DEEP_LEARNING/DATA_SETS/'
 
 
 CONFIG = {
