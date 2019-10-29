@@ -1,6 +1,7 @@
 import numpy as np
 import pandas as pd
 
+
 from tensorflow.keras.layers import Input, Embedding, Flatten
 from tensorflow.keras import regularizers
 from tensorflow.keras.layers import dot
@@ -66,8 +67,8 @@ class SimpleCF:
 
     # includes model.compile with Adam optimizer, loss is MSE
     def set_model(self, n_users, n_movies, n_latent_factors=64):
-        n_movies = n_movies + 1
-        n_users = n_users + 1
+        n_movies = n_movies
+        n_users = n_users
         self.model_postfix = f'{n_users}_{n_movies}'
         user_input = Input(shape=(1,), name='user_input', dtype='int64')
         user_embedding = Embedding(n_users, n_latent_factors, name='user_embedding')(user_input)

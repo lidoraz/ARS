@@ -37,7 +37,8 @@ class Data():
         traning_set = (shuffled[:, 0], shuffled[:, 1], shuffled[:, 2])
         return traning_set
 
-    def _create_negative_items(self, df, negative_items_path):
+    @staticmethod
+    def _create_negative_items(df, negative_items_path):
         print(f"Could not find '{negative_items_path}', creating...")
         negative_items = {}
         users = list(sorted(df['user_id'].unique()))
@@ -46,7 +47,8 @@ class Data():
         pickle.dump(negative_items, open(negative_items_path, "wb"))
         return negative_items
 
-    def _create_training_instances(self, df, negative_items, num_negatives, training_instances_path, percent):
+    @staticmethod
+    def _create_training_instances(df, negative_items, num_negatives, training_instances_path, percent):
         print(f"Could not find '{training_instances_path}', creating...")
         df = df.groupby('user_id').apply(lambda s: s.sample(frac=percent))
         user_input, item_input, labels = [], [], []
@@ -64,6 +66,7 @@ class Data():
         training_set = (np.array(user_input), np.array(item_input), np.array(labels))
         pickle.dump(training_set, open(training_instances_path, "wb"))
         return training_set
+
     # for every user, in generates 1 correct input, and num_negatives incorrect inputs
     def get_train_instances(self, df, num_negatives, percent = 1.0):
         rating_type = 'binary_rating' if self.binary else 'multi_rating'
@@ -91,8 +94,8 @@ class Data():
         df_reindexed = df.copy()
         df_reindexed['user_id'] = df_reindexed['user_id'].apply(lambda x: self._userid2idx[x])
         df_reindexed['movie_id'] = df_reindexed['movie_id'].apply(lambda x: self._itemid2idx[x])
-        self.n_users = df_reindexed['user_id'].max()
-        self.n_movies = df_reindexed['movie_id'].max()
+        self.n_users = df_reindexed['user_id'].max() + 1
+        self.n_movies = df_reindexed['movie_id'].max() + 1
         print('n_users:', self.n_users, 'n_movies:', self.n_movies)
         # TODO: look where to put this
         self.user_item_matrix_reindexed = pd.pivot_table(data=df_reindexed, values='rating', index='user_id', columns='movie_id').fillna(0)
@@ -186,14 +189,30 @@ class Data():
 
 from DataLoader import *
 from time import time
-if __name__ == '__main__':
-    df = get_movielens1m(convert_binary= False)
 
+def create_datasets():
+    print('creating train datasets for faster debugging')
+    dataframes = [get_movielens1m(convert_binary=False),
+                  get_movielens100k(convert_binary=False),
+                  get_movielens1m(convert_binary=True),
+                  get_movielens100k(convert_binary=True)]
+    for df in dataframes:
+        data = Data(seed=42)
+        t0 = time()
+        training_set, test_set, n_users, n_movies = data.pre_processing(df, test_percent=1, train_precent=1)
+        print(f'data.pre_processing done. T:{time() - t0}')
+        user_input, item_input, labels = training_set
+        print(user_input[:10], item_input[:10], labels[:10])
+
+def test_Data_pre_processing_dataset():
+    df = get_movielens100k(convert_binary=False)
     data = Data(seed=42)
     t0 = time()
-    training_set, test_set, n_users, n_movies = data.pre_processing(df, test_percent=0.5, train_precent=1)
+    training_set, test_set, n_users, n_movies = data.pre_processing(df, test_percent=1, train_precent=1)
     print(f'data.pre_processing done. T:{time() - t0}')
     user_input, item_input, labels = training_set
     print(user_input[:10], item_input[:10], labels[:10])
-    # for k,v in test_set.items():
-    #     print(k,v)
+
+
+if __name__ == '__main__':
+    create_datasets()

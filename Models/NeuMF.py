@@ -18,13 +18,6 @@ The best NeuMF model is saved to Pretrain/ml-1m_NeuMF_8_[64,32,16,8]_1571230994.
 
 '''
 import numpy as np
-
-# TODO: CRASHED WITH ERROR
-# tensorflow.python.framework.errors_impl.ResourceExhaustedError: 2 root error(s) found.
-# Resource exhausted:  OOM when allocating tensor with shape[6040,32] and type float on /job:localhost/replica:0/task:0/device:CPU:0 by allocator cpu
-
-# TODO: SOL: https://stackoverflow.com/questions/50694968/resourceexhaustederror-see-above-for-traceback-oom-when-allocating-tensor-wit
-
 import tensorflow.keras
 from tensorflow.keras import backend as K
 from tensorflow.keras import initializers
@@ -83,8 +76,6 @@ def init_normal(shape, name=None):
     return initializers.normal(shape, scale=0.01, name=name)
 
 def get_model(num_users, num_items, mf_dim=10, layers=[10], reg_layers=[0], reg_mf=0):
-    num_users = num_users + 1
-    num_items = num_items + 1
     assert len(layers) == len(reg_layers)
     num_layer = len(layers) #Number of layers in the MLP
     # Input variables
@@ -131,48 +122,8 @@ def get_model(num_users, num_items, mf_dim=10, layers=[10], reg_layers=[0], reg_
     
     return model
 
-# for every user, in generates 1 correct input, and num_negatives incorrect inputs
-# def get_train_instances(train, num_negatives):
-#     user_input, item_input, labels = [],[],[]
-#     num_users = train.shape[0]
-#     for (u, i) in train.keys():
-#         # positive instance
-#         user_input.append(u)
-#         item_input.append(i)
-#         labels.append(1)
-#         # negative instances
-#         for t in range(num_negatives):
-#             j = np.random.randint(num_items)
-#             while (u, j) in train: #train.has_key((u, j)):
-#                 j = np.random.randint(num_items)
-#             user_input.append(u)
-#             item_input.append(j)
-#             labels.append(0)
-#     return user_input, item_input, labels
-
-# def generate_training_set(self, df_removed_recents, sorted_unique_users, sorted_unique_movies):
-#     # self.df_removed_recents = df_removed_recents
-#     self.n_users = len(sorted_unique_users)
-#     self.n_movies = len(sorted_unique_movies)
-#     print('n_users:', self.n_users, 'n_movies:', self.n_movies)
-#     df_dropped = df_removed_recents.copy()  # fix for inplace change
-#
-#     # creates a id->idx mapping, both user and item
-#     self._userid2idx = {o: i for i, o in enumerate(sorted_unique_users)}
-#     self._itemid2idx = {o: i for i, o in enumerate(sorted_unique_movies)}
-#
-#     df_dropped['user_id'] = df_dropped['user_id'].apply(lambda x: self._userid2idx[x])
-#     df_dropped['movie_id'] = df_dropped['movie_id'].apply(lambda x: self._itemid2idx[x])
-#     split = np.random.rand(len(df_dropped)) < 0.8
-#     train = df_dropped[split]
-#     valid = df_dropped[~split]
-#
-#         print(train.shape, valid.shape)
-#     return train, valid, self.n_users, self.n_movies
-
 
 from Evalute import evaluate_model
-
 from DataLoader import *
 
 if __name__ == '__main__':
@@ -230,7 +181,7 @@ if __name__ == '__main__':
         mean_hr, mean_ndcg = evaluate_model(model, test_set)
         print('Iteration: %d Fit:[%.1f s]: HR = %.4f, NDCG = %.4f, loss = %.4f, Eval:[%.1f s]'
               % (epoch+1, t2 - t1, mean_hr, mean_ndcg, hist.history['loss'][0], time() - t2))
-        train_set = data.shuffle_training(train_set)
+        # train_set = data.shuffle_training(train_set)
     # else:
     #
     #     model_out_file = 'Pretrain/ml-1m_NeuMF_8_[64,32,16,8]_1571090710.h5'
