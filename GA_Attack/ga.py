@@ -3,8 +3,8 @@ import uuid
 
 
 class AttackAgent:
-    def __init__(self, n_m_users=0, n_items=0, gnome=None, d_birth=0 , POS_RATIO=1, BINARY = True):
-        if gnome is not None and ( n_items != 0 or n_items != 0 or d_birth != 0 or POS_RATIO != 1):
+    def __init__(self, n_m_users=0, n_items=0, gnome=None, d_birth=0, POS_RATIO=1, BINARY = True):
+        if gnome is not None and ( n_items != 0 or n_items != 0 or d_birth == 0 or POS_RATIO != 1):
             raise ValueError('not valid config')
         self.fitness = .0
         # self.is_fame = False
@@ -39,7 +39,7 @@ class FakeUserGeneticAlgorithm:
         self.POS_RATIO = POS_RATIO
 
     def init_agents(self, n_m_users, n_items):
-        return [AttackAgent(n_m_users, n_items, POS_RATIO=self.POS_RATIO) for _ in range(self.POP_SIZE)]
+        return [AttackAgent(n_m_users, n_items, POS_RATIO=self.POS_RATIO, BINARY=self.BINARY) for _ in range(self.POP_SIZE)]
 
 
     def fitness(self, agents):
@@ -128,7 +128,7 @@ class FakeUserGeneticAlgorithm:
                 return list(map(bit_flip_func_non_binary, arr))
         for agent in agents:
             if np.random.rand() < self.MUTATE_USER_PROB:
-                agent.gnome = np.apply_along_axis(flip_bit_1d_array, 0, agent.gnome)
+                agent.gnome = np.apply_along_axis(flip_bit_1d_array, 0, arr=agent.gnome)
                 agent.generations_mutated += 1
         # flip bit in an entry in a prob
         # this will work on every entry, to create stohastic behaviour, kind of epsilon greedy method.
