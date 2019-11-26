@@ -1,19 +1,17 @@
 from concurrent.futures.thread import ThreadPoolExecutor
 
-import numpy as np
-from time import time
-import numpy as np
-import matplotlib.pyplot as plt
 from Models.NeuMF import get_model
-from Evalute import evaluate_model
-from DataLoader import *
-from Data import *
-from tensorflow.keras.optimizers import Adam
+from keras.optimizers import Adam
 
-import pandas as pd
 from GA_Attack.ga import FakeUserGeneticAlgorithm
-from GA_Attack.RandomUserAttack_NeuMF import train_evaluate_model, plot
-from tensorflow.keras.models import clone_model
+from GA_Attack.Evalute import train_evaluate_model, plot
+from GA_Attack.Data import *
+
+
+from keras.models import model_from_json
+import tensorflow as tf
+tf.logging.set_verbosity(tf.logging.ERROR)
+
 ml1m = 'movielens1m'
 ml100k = 'movielens100k'
 
@@ -42,39 +40,11 @@ CONVERT_BINARY = True
 DATASET_NAME = ml100k
 TEST_SET_PERCENTAGE = 1
 
-N_MAL_USERS = 50
-
-BASE_MODEL_EPOCHS = 1  # TODO: CHANGE
+BASE_MODEL_EPOCHS = 5
 MODEL_P_EPOCHS = 3
+MODEL_TAKE_BEST = False
 VERBOSE = 1
 
-def convert_attack_agent_to_input_df(agent):
-    users, items = np.nonzero(agent.gnome)
-    ratings = agent.gnome[(users, items)]
-    df = pd.DataFrame(
-        {'user_id': users,
-         'item_id': items,
-         'rating':ratings})
-    return df
-
-# add n_user offset for malicious users
-def create_training_instances_malicious(df,  user_item_matrix, n_users, num_negatives= 4):
-    user_input, item_input, labels = [], [], []
-    negative_items = {user: np.argwhere(user_item_matrix[user]==0).flatten() for user in df['user_id'].unique()}
-    for index, row in df.iterrows():
-        user = row['user_id']
-        user_input.append(user)
-        item_input.append(row['item_id'])
-        labels.append(row['rating'])
-        negative_input_items = np.random.choice(negative_items[user], num_negatives)
-        for neg_item in negative_input_items:
-            user_input.append(user)
-            item_input.append(neg_item)
-            labels.append(0)
-
-    training_set = (np.array(user_input) + n_users, np.array(item_input), np.array(labels))
-    # print('len(training_set):', len(training_set))
-    return training_set
 
 def train_base_model():
     df = get_from_dataset_name(DATASET_NAME, CONVERT_BINARY)
@@ -83,7 +53,7 @@ def train_base_model():
     train_set, test_set, n_users, n_movies = data.pre_processing(df, test_percent=TEST_SET_PERCENTAGE)
     # mal_training = fake_user_selected_one_item(n_mal_users, n_users, n_movies, convert_binary,
     #                                            n_random_movies=50)
-    n_users_w_mal = n_users + N_MAL_USERS + 1
+    n_users_w_mal = n_users + N_FAKE_USERS + 1
     print('REGULAR PHASE')
     # NeuMF Parameters
     mf_dim = 8
@@ -92,7 +62,7 @@ def train_base_model():
     reg_mf = 0
     learning_rate = 0.001
     batch_size = 512
-    verbose = 0
+    verbose = 1
     loss_func = 'binary_crossentropy'
 
     model = get_model(n_users_w_mal, n_movies, mf_dim, layers, reg_layers, reg_mf)
@@ -116,7 +86,7 @@ def load_base_model():
     # weights_path = f'{BASE_MODEL_DIR}/NeuMF_w_{n_users_w_mal}_{n_movies}.h5'
     model_path = f'{BASE_MODEL_DIR}/NeuMF.json'
     weights_path = f'{BASE_MODEL_DIR}/NeuMF_w.h5'
-    from tensorflow.keras.models import model_from_json
+
     with open(model_path, 'r') as json_file:
         loaded_model_json = json_file.read()
     model = model_from_json(loaded_model_json)
@@ -128,23 +98,25 @@ def load_base_model():
 def fitness(agents, n_users, test_set, best_base_hr, best_base_ndcg):
     executor = ThreadPoolExecutor(max_workers=10)
 
-    def asyc_func(agent):
-        batch_size = 512
-        model_copy = load_base_model()
-        attack_df = convert_attack_agent_to_input_df(agent)
-        malicious_training_set = create_training_instances_malicious(df=attack_df, user_item_matrix=agent.gnome,
-                                                                     n_users=n_users, num_negatives=4)
-        best_pert_model, best_hr, best_ndcg = train_evaluate_model(model_copy, malicious_training_set, test_set,
-                                                                   batch_size=batch_size,
-                                                                   epochs=MODEL_P_EPOCHS, verbose=VERBOSE)
-        delta_hr = best_base_hr - best_hr
-        delta_ndcg = best_base_ndcg - best_ndcg
+    def eval_fitness_func(agent):
+        with tf.Graph().as_default():  # workaround for tensorflow, each task creates a new graph
+            with tf.Session().as_default():
+                batch_size = 512
+                model_copy = load_base_model()
+                attack_df = convert_attack_agent_to_input_df(agent)
+                malicious_training_set = create_training_instances_malicious(df=attack_df, user_item_matrix=agent.gnome,
+                                                                             n_users=n_users, num_negatives=4)
+                best_pert_model, best_hr, best_ndcg = train_evaluate_model(model_copy, malicious_training_set, test_set,
+                                                                           batch_size=batch_size,
+                                                                           epochs=MODEL_P_EPOCHS, verbose=VERBOSE)
+                delta_hr = best_base_hr - best_hr
+                delta_ndcg = best_base_ndcg - best_ndcg
+                agent_fitness = (2 * delta_hr * delta_ndcg) / (delta_hr + delta_ndcg)  # harmonic mean between deltas
+                if VERBOSE:
+                    print(f'agent_id: {agent.id} age: {agent.age} ; delta_hr: {delta_hr:0.2f} ; delta_ndcg: {delta_ndcg:0.2f} ; fitness: {agent_fitness: 0.3f}')
+                return agent_fitness
 
-        if VERBOSE:
-            print(f'agent_id: {agent.id} ; delta_hr: {delta_hr:0.2f} ; delta_ndcg: {delta_ndcg:0.2f}')
-        return (2 * delta_hr * delta_ndcg) / (delta_hr + delta_ndcg)  # harmonic mean between deltas
-
-    fitness_list = list(executor.map(asyc_func, agents))
+    fitness_list = list(executor.map(eval_fitness_func, agents))
     for idx , agent in enumerate(agents):
         agent.fitness = fitness_list[idx]
     return agents
@@ -157,10 +129,10 @@ def main():
 
     print("ADVERSRIAL PHASE")
 
-    # print(AttackAgent(N_FAKE_USERS, N_ITEMS).gnome)
-    ga = FakeUserGeneticAlgorithm()
+    ga = FakeUserGeneticAlgorithm(POP_SIZE, N_GENERATIONS, GENERATIONS_BEFORE_REMOVAL, REMOVE_PERCENTILE,
+                                  MUTATE_USER_PROB, MUTATE_BIT_PROB, BINARY, POS_RATIO)
 
-    agents = ga.init_agents(N_FAKE_USERS, N_ITEMS, POP_SIZE)
+    agents = ga.init_agents(N_FAKE_USERS, N_ITEMS)
 
 
     print('created n_agents', len(agents))
@@ -176,7 +148,7 @@ def main():
         agents = ga.crossover(agents, cur_generation)
         agents = ga.mutation(agents)
         t2 = time() - t0
-        print(f'G: {cur_generation}, fitness_time:[{t1:0.2f s}], overall_time: [{t2:0.2f s}]')
+        print(f'G: {cur_generation}, fitness_time:[{t1:0.2f}s], overall_time: [{t2:0.2f}s]')
 
 
 

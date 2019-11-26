@@ -22,7 +22,32 @@ This class takes the loaded movie_lens DataFrame and generates:
 """
 
 
+def create_training_instances_malicious(df,  user_item_matrix, n_users, num_negatives= 4):
+    user_input, item_input, labels = [], [], []
+    negative_items = {user: np.argwhere(user_item_matrix[user]==0).flatten() for user in df['user_id'].unique()}
+    for index, row in df.iterrows():
+        user = row['user_id']
+        user_input.append(user)
+        item_input.append(row['item_id'])
+        labels.append(row['rating'])
+        negative_input_items = np.random.choice(negative_items[user], num_negatives)
+        for neg_item in negative_input_items:
+            user_input.append(user)
+            item_input.append(neg_item)
+            labels.append(0)
 
+    training_set = (np.array(user_input) + n_users, np.array(item_input), np.array(labels))
+    # print('len(training_set):', len(training_set))
+    return training_set
+
+def convert_attack_agent_to_input_df(agent):
+    users, items = np.nonzero(agent.gnome)
+    ratings = agent.gnome[(users, items)]
+    df = pd.DataFrame(
+        {'user_id': users,
+         'item_id': items,
+         'rating':ratings})
+    return df
 
 class Data():
     def __init__(self, negative_set_size=99, seed=None):

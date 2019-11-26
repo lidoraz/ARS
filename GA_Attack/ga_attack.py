@@ -1,34 +1,27 @@
-import numpy as np
-from time import time
-import numpy as np
-import matplotlib.pyplot as plt
-from Models.NeuMF import get_model
-from Evalute import evaluate_model
-from DataLoader import *
-from Data import *
-from tensorflow.keras.optimizers import Adam
+import os
 
-import pandas as pd
-from ga import FakeUserGeneticAlgorithm
-from GA_Attack.RandomUserAttack_NeuMF import train_evaluate_model, plot
-from tensorflow.keras.models import clone_model
+from GA_Attack.Data import convert_attack_agent_to_input_df
+
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
+
+from Models.NeuMF import get_model
+from keras.optimizers import Adam
+
+from GA_Attack.ga import FakeUserGeneticAlgorithm
+from GA_Attack.Evalute import train_evaluate_model, plot
+from GA_Attack.Data import *
+from keras.models import clone_model
+
+import tensorflow as tf
+tf.logging.set_verbosity(tf.logging.ERROR)
 ml1m = 'movielens1m'
 ml100k = 'movielens100k'
-
-def convert_attack_agent_to_input_df(agent):
-    users, items = np.nonzero(agent.gnome)
-    ratings = agent.gnome[(users, items)]
-    df = pd.DataFrame(
-        {'user_id': users,
-         'item_id': items,
-         'rating':ratings})
-    return df
 
 
 BASE_MODEL_DIR = 'base_models'
 
 # HYPER-PARAMETERS
-POP_SIZE = 6
+POP_SIZE = 100
 N_GENERATIONS = 100
 # Mutation
 MUTATE_USER_PROB = 0.2  # prob for choosing an individual
@@ -38,8 +31,8 @@ GENERATIONS_BEFORE_REMOVAL = 50
 REMOVE_PERCENTILE = 0.05  # remove only worst 5%
 
 # Model / Dataset related
-N_FAKE_USERS = 50
-N_ITEMS = 10
+N_FAKE_USERS = 10
+# N_ITEMS = 10
 BINARY = False  # binary or non binary data
 POS_RATIO = 0.1  # Ratio pos/ neg ratio  one percent from each user
 
@@ -48,29 +41,11 @@ CONVERT_BINARY = True
 DATASET_NAME = ml100k
 TEST_SET_PERCENTAGE = 1
 
-N_MAL_USERS = 50
-
-BASE_MODEL_EPOCHS = 1  # TODO: CHANGE
+BASE_MODEL_EPOCHS = 5  # TODO: CHANGE
 MODEL_P_EPOCHS = 3
-VERBOSE = 0
+VERBOSE = 2
 # add n_user offset for malicious users
-def create_training_instances_malicious(df,  user_item_matrix, n_users, num_negatives= 4):
-    user_input, item_input, labels = [], [], []
-    negative_items = {user: np.argwhere(user_item_matrix[user]==0).flatten() for user in df['user_id'].unique()}
-    for index, row in df.iterrows():
-        user = row['user_id']
-        user_input.append(user)
-        item_input.append(row['item_id'])
-        labels.append(row['rating'])
-        negative_input_items = np.random.choice(negative_items[user], num_negatives)
-        for neg_item in negative_input_items:
-            user_input.append(user)
-            item_input.append(neg_item)
-            labels.append(0)
 
-    training_set = (np.array(user_input) + n_users, np.array(item_input), np.array(labels))
-    # print('len(training_set):', len(training_set))
-    return training_set
 
 def train_base_model():
     df = get_from_dataset_name(DATASET_NAME, CONVERT_BINARY)
@@ -79,7 +54,7 @@ def train_base_model():
     train_set, test_set, n_users, n_movies = data.pre_processing(df, test_percent=TEST_SET_PERCENTAGE)
     # mal_training = fake_user_selected_one_item(n_mal_users, n_users, n_movies, convert_binary,
     #                                            n_random_movies=50)
-    n_users_w_mal = n_users + N_MAL_USERS + 1
+    n_users_w_mal = n_users + N_FAKE_USERS + 1
     print('REGULAR PHASE')
     # NeuMF Parameters
     mf_dim = 8
@@ -88,24 +63,17 @@ def train_base_model():
     reg_mf = 0
     learning_rate = 0.001
     batch_size = 512
-    verbose = 0
+    verbose = 1
     loss_func = 'binary_crossentropy'
-    if loss_func == 'binary_crossentropy':
-        assert CONVERT_BINARY
 
     model = get_model(n_users_w_mal, n_movies, mf_dim, layers, reg_layers, reg_mf)
     model.compile(optimizer=Adam(lr=learning_rate), loss=loss_func)
     print('get_model done')
 
     # this should be the best model according to the evalute process, in terms of HR and NDCG
-    model_base, best_hr, best_ndcg = train_evaluate_model(model, train_set, test_set, batch_size=batch_size, epochs=BASE_MODEL_EPOCHS, verbose=verbose)
+    model_base, best_hr, best_ndcg = train_evaluate_model(model, train_set, test_set, batch_size=batch_size,
+                                                          epochs=BASE_MODEL_EPOCHS, verbose=verbose)
     return model_base, n_users, n_movies, test_set, best_hr, best_ndcg
-    # # save model
-    # model.save_weights(f'{BASE_MODEL_DIR}/NeuMF_w_{n_users_w_mal}_{n_movies}.h5')
-    # model_json = model.to_json()
-    # with open(f'{BASE_MODEL_DIR}/NeuMF_{n_users_w_mal}_{n_movies}.json', "w") as json_file:
-    #     json_file.write(model_json)
-    # print('Saved model and weights at dir:', BASE_MODEL_DIR)
 
 def compile_model(model):
     model.compile(optimizer=Adam(lr=0.001), loss='binary_crossentropy')
@@ -113,7 +81,7 @@ def compile_model(model):
 def fitness(agents, base_model, n_users, test_set, best_base_hr, best_base_ndcg):
 
     batch_size = 512
-    for agent in tqdm(agents, total=len(agents)):
+    for agent in tqdm(agents, total=len(agents),   ):
         model_copy = clone_model(base_model)
         model_copy.set_weights(base_model.get_weights())
         compile_model(model_copy)
@@ -124,9 +92,11 @@ def fitness(agents, base_model, n_users, test_set, best_base_hr, best_base_ndcg)
         delta_hr = best_base_hr - best_hr
         delta_ndcg = best_base_ndcg - best_ndcg
 
+        agent_fitness = (2 * delta_hr * delta_ndcg) / (delta_hr + delta_ndcg)  # harmonic mean between deltas
         if VERBOSE:
-            print(f'agent_id: {agent.id} ; delta_hr: {delta_hr:0.2f} ; delta_ndcg: {delta_ndcg:0.2f}')
-        agent.fitness = (2 * delta_hr * delta_ndcg) / (delta_hr + delta_ndcg)  # harmonic mean between deltas
+            print(f'agent_id: {agent.id} age: {agent.age} ; delta_hr: {delta_hr:0.2f} ; delta_ndcg: {delta_ndcg:0.2f} ; fitness: {agent_fitness: 0.3f}')
+        agent.fitness = agent_fitness
+    return agents
 
 def main():
     # init_model()
@@ -137,7 +107,8 @@ def main():
     print("ADVERSRIAL PHASE")
 
     # print(AttackAgent(N_FAKE_USERS, N_ITEMS).gnome)
-    ga = FakeUserGeneticAlgorithm()
+    ga = FakeUserGeneticAlgorithm(POP_SIZE, N_GENERATIONS, GENERATIONS_BEFORE_REMOVAL, REMOVE_PERCENTILE,
+                                  MUTATE_USER_PROB, MUTATE_BIT_PROB, BINARY, POS_RATIO)
 
     agents = ga.init_agents(N_FAKE_USERS, N_ITEMS)
 
