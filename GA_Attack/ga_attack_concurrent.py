@@ -11,7 +11,7 @@ from Data import *
 from tensorflow.keras.optimizers import Adam
 
 import pandas as pd
-from ga import FakeUserGeneticAlgorithm
+from GA_Attack.ga import FakeUserGeneticAlgorithm
 from GA_Attack.RandomUserAttack_NeuMF import train_evaluate_model, plot
 from tensorflow.keras.models import clone_model
 ml1m = 'movielens1m'
@@ -22,7 +22,7 @@ ml100k = 'movielens100k'
 BASE_MODEL_DIR = 'base_models'
 
 # HYPER-PARAMETERS
-POP_SIZE = 10
+POP_SIZE = 4
 N_GENERATIONS = 100
 # Mutation
 MUTATE_USER_PROB = 0.2  # prob for choosing an individual
@@ -94,8 +94,6 @@ def train_base_model():
     batch_size = 512
     verbose = 0
     loss_func = 'binary_crossentropy'
-    if loss_func == 'binary_crossentropy':
-        assert CONVERT_BINARY
 
     model = get_model(n_users_w_mal, n_movies, mf_dim, layers, reg_layers, reg_mf)
     model.compile(optimizer=Adam(lr=learning_rate), loss=loss_func)
@@ -112,12 +110,8 @@ def train_base_model():
 
     return n_users, n_movies, test_set, best_hr, best_ndcg
 
-def compile_model(model):
-    model.compile(optimizer=Adam(lr=0.001), loss='binary_crossentropy')
-
 
 def load_base_model():
-
     # model_path = f'{BASE_MODEL_DIR}/NeuMF_{n_users_w_mal}_{n_movies}.json'
     # weights_path = f'{BASE_MODEL_DIR}/NeuMF_w_{n_users_w_mal}_{n_movies}.h5'
     model_path = f'{BASE_MODEL_DIR}/NeuMF.json'
@@ -127,6 +121,7 @@ def load_base_model():
         loaded_model_json = json_file.read()
     model = model_from_json(loaded_model_json)
     model.load_weights(weights_path)
+    model.compile(optimizer=Adam(lr=0.001), loss='binary_crossentropy')
     return model
 
 
@@ -136,7 +131,6 @@ def fitness(agents, n_users, test_set, best_base_hr, best_base_ndcg):
     def asyc_func(agent):
         batch_size = 512
         model_copy = load_base_model()
-        compile_model(model_copy)
         attack_df = convert_attack_agent_to_input_df(agent)
         malicious_training_set = create_training_instances_malicious(df=attack_df, user_item_matrix=agent.gnome,
                                                                      n_users=n_users, num_negatives=4)
@@ -151,8 +145,8 @@ def fitness(agents, n_users, test_set, best_base_hr, best_base_ndcg):
         return (2 * delta_hr * delta_ndcg) / (delta_hr + delta_ndcg)  # harmonic mean between deltas
 
     fitness_list = list(executor.map(asyc_func, agents))
-    for agent, agent_fitness in zip(agents, fitness_list):
-        agent.fitness = fitness
+    for idx , agent in enumerate(agents):
+        agent.fitness = fitness_list[idx]
     return agents
 
 def main():
@@ -172,13 +166,17 @@ def main():
     print('created n_agents', len(agents))
     ga.print_stats(agents, 0)
     for cur_generation in range(1, N_GENERATIONS):
+        t0 = time()
         agents = fitness(agents, n_users, test_set, best_hr, best_ndcg)
-        if cur_generation % 50 == 0:
-            ga.print_stats(agents , cur_generation)
+        t1 = time() - t0
+        if cur_generation % 3 == 0:
+            ga.print_stats(agents , cur_generation,)
 
         agents = ga.selection(agents)
         agents = ga.crossover(agents, cur_generation)
         agents = ga.mutation(agents)
+        t2 = time() - t0
+        print(f'G: {cur_generation}, fitness_time:[{t1:0.2f s}], overall_time: [{t2:0.2f s}]')
 
 
 
