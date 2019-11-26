@@ -21,6 +21,9 @@ This class takes the loaded movie_lens DataFrame and generates:
 * Utility functions user_id / movie_id to index
 """
 
+
+
+
 class Data():
     def __init__(self, negative_set_size=99, seed=None):
         if not (seed is None):

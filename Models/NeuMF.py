@@ -17,6 +17,7 @@ The best NeuMF model is saved to Pretrain/ml-1m_NeuMF_8_[64,32,16,8]_1571230994.
 
 
 '''
+import logging
 import numpy as np
 import tensorflow.keras
 from tensorflow.keras import backend as K
@@ -147,24 +148,18 @@ if __name__ == '__main__':
 
     # Loading data
     t1 = time()
-    df = get_movielens1m(convert_binary=True)
     # df = get_movielens1m(convert_binary=True)
-    # df = get_from_dataset_name('movielens1m', convert_binary=True)
+    # movielens100k , movielens1m
+    dataset_name = 'movielens100k'
+    df = get_from_dataset_name(dataset_name, convert_binary=True)
     data = Data(seed=42)
     train_set, test_set, n_users, n_movies = data.pre_processing(df)
-    print(f'num_users: {n_users}, num_items: {n_movies}')
-    # print("Load data done [%.1f s]. #user=%d, #item=%d, #train=%d, #test=%d"
-    #       %(time()-t1, num_users, num_items, train.nnz, len(testRatings)))
-    
-    # Build model
     model = get_model(n_users, n_movies, mf_dim, layers, reg_layers, reg_mf)
     model.compile(optimizer=Adam(lr=learning_rate), loss='binary_crossentropy')
     print('get_model done')
 
-    (hits, ndcgs) = evaluate_model(model, test_set)
-    hr, ndcg = np.array(hits).mean(), np.array(ndcgs).mean()
-    print('Init: HR = %.4f, NDCG = %.4f' % (hr, ndcg))
-    best_hr, best_ndcg, best_iter = hr, ndcg, -1
+    (mean_hr, mean_ndcg) = evaluate_model(model, test_set)
+    best_hr, best_ndcg, best_iter = mean_hr, mean_ndcg, -1
 
     # if args.out > 0:
     #     model.save_weights(model_out_file, overwrite=True)
@@ -176,7 +171,7 @@ if __name__ == '__main__':
         # Training
         hist = model.fit([np.array(user_input), np.array(item_input)], #input
                          np.array(labels), # labels
-                         batch_size=batch_size, epochs=1, verbose=0, shuffle=True)
+                         batch_size=batch_size, epochs=1, verbose=1, shuffle=True)
         t2 = time()
         mean_hr, mean_ndcg = evaluate_model(model, test_set)
         print('Iteration: %d Fit:[%.1f s]: HR = %.4f, NDCG = %.4f, loss = %.4f, Eval:[%.1f s]'

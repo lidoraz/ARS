@@ -1,5 +1,5 @@
 import numpy as np
-
+import uuid
 
 
 class AttackAgent:
@@ -13,6 +13,7 @@ class AttackAgent:
         # changing params through generations
         self.age = 0  # at what generation this agent created?
         self.generations_mutated = 0
+        self.id = uuid.uuid4().hex[:8]
         # initiate or create one from given gnome (offspring)
         if gnome is None:
             if BINARY:
@@ -27,11 +28,12 @@ class AttackAgent:
             self.gnome = gnome
 
 class FakeUserGeneticAlgorithm:
-    def init_agents(self, n_m_users, n_items):
-        return [AttackAgent(n_m_users, n_items) for _ in range()]
+    def init_agents(self, n_m_users, n_items, POP_SIZE):
+        return [AttackAgent(n_m_users, n_items) for _ in range(POP_SIZE)]
 
 
     def fitness(self, agents):
+
         for agent in agents:
             if not agent.evaluted:
                 agent.fitness = sum(sum(agent.gnome))

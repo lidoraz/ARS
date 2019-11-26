@@ -6,9 +6,10 @@ from time import time
 import numpy as np
 import matplotlib.pyplot as plt
 from Models.NeuMF import get_model
-from Evalute import evaluate_model
-from DataLoader import *
-from Data import *
+from GA_Attack.Evalute import evaluate_model
+from GA_Attack.DataLoader import *
+from GA_Attack.Data import *
+
 from tensorflow.keras.optimizers import Adam
 # TODO: Much better to se CPU here instead of GPU, probably because the model is simple,
 #  Predict takes 1.5s instead of 44s
@@ -17,51 +18,32 @@ from tensorflow.keras.models import clone_model
 def train_evaluate_model(model, train_set, test_set, batch_size=256, epochs=5, verbose= 0):
     best_hr = 0
     best_ndcg = 0
+    best_epoch = 0
     t0 = time()
-    mean_hr, mean_ndcg, _ = evaluate_model(model, test_set)
+    mean_hr, mean_ndcg, _ = evaluate_model(model, test_set, verbose=verbose)
+    models = []
 
     for epoch in range(epochs):
         t1 = time()
         (user_input, item_input, labels) = train_set
         loss = model.fit([np.array(user_input), np.array(item_input)],  # input
                          np.array(labels),  # labels
-                         batch_size=batch_size, epochs=1, verbose=verbose, shuffle=True)
+                         batch_size=batch_size, epochs=1, verbose=verbose > 1, shuffle=True)
 
+        model_copy = clone_model(model)
+        model_copy.set_weights(model.get_weights())
+        models.append(model_copy)
         t2 = time()
-        mean_hr, mean_ndcg, time_eval = evaluate_model(model, test_set, verbose = 0)
-        print('Iteration: %d Fit:[%.1f s]: HR = %.4f, NDCG = %.4f, loss = %.4f, Eval:[%.1f s]'
-              % (epoch + 1, t2 - t1, mean_hr, mean_ndcg, loss.history['loss'][0], time_eval))
+        mean_hr, mean_ndcg, time_eval = evaluate_model(model, test_set, verbose=0)
+        if verbose > 1:
+            print('Iteration: %d Fit:[%.1f s]: HR = %.4f, NDCG = %.4f, loss = %.4f, Eval:[%.1f s]'
+                  % (epoch + 1, t2 - t1, mean_hr, mean_ndcg, loss.history['loss'][0], time_eval))
         if mean_hr > best_hr and mean_ndcg > best_ndcg:
             best_hr = mean_hr
             best_ndcg = mean_ndcg
+            best_epoch = epoch
             # low_rank_cf_model.save_model()
-    print('Total time - train_evaluate_model: [%.1f s]' % (time() - t0))
-
-# def _generate_entries(new_users_entries, n_new_users, n_users, n_movies):
-#     new_user_ids = [n_users + user_id for user_id in range(1, n_new_users)]
-#     new_entries = [[n_users + user_id, movie_id, new_users_entries[user_id, movie_id], -1] for user_id in range(1, n_new_users) for
-#                    movie_id in range(1, n_movies)]
-#     # conv to df way - row is user_id, movie_id, rating, timestamp
-#     new_entries = pd.DataFrame(new_entries, columns=['user_id', 'movie_id', 'rating', 'timestamp'])
-#     return new_entries, new_user_ids
-#
-# """
-# This seems to help the model increase it's HR and NDCG, could be part of adversarial training ?
-# """
-# def fake_user_random(n_new_users, n_movies, convert_binary):
-#     print('fake_user_random()')
-#     if convert_binary:
-#         new_users_entries = np.random.randint(0, 2, (n_new_users, n_movies))  # assuems binary data
-#     else:
-#         new_users_entries = np.random.randint(0, 6, (n_new_users, n_movies))
-#
-#     return _generate_entries(new_users_entries, n_new_users, n_movies)
-#
-# def fake_user_zeros(n_new_users, n_movies):
-#     print('fake_user_zeros()')
-#     new_users_entries = np.zeros((n_new_users, n_movies))
-#
-#     return _generate_entries(new_users_entries, n_new_users, n_movies)
+    return models[best_epoch], best_hr, best_ndcg
 
 
 def fake_user_selected_one_item(n_new_users, n_users, n_movies, convert_binary, n_random_movies=20, negative_samples = 4):
@@ -162,7 +144,7 @@ def main():
     print('get_model done')
     # model.set_model(n_users_w_mal, n_movies, n_latent_factors=64)
     # test_fit(model, train_set, batch_size, epochs=5)
-    train_evaluate_model(model, train_set, test_set, batch_size=batch_size, epochs=epochs, verbose=verbose) # TODO: SOMETHING IS WRONG WITH THIS FUNCTION FIT IS VERY SLOW
+    train_evaluate_model(model, train_set, test_set, batch_size=batch_size, epochs=epochs, verbose=verbose)
 
     print("ADVERSRIAL PHASE")
     hr_list = []
@@ -185,31 +167,9 @@ def main():
     plot(hr_list, ndcg_list)
 
 
-
-    #TODO:
-    # Here magically we will learn how to add different rating to the mal users, such that it will increase the loss of the model
-    # Two problems: How do we generate input that increases the loss of the model
-    # 2nd: how do we make sure that after the model retrains, or atleast, retrains on our *NEW* data, it will achieve poor results?
-    # 3rd how do we minimize the amount of #mal_users, and #changed ratings.
-
-
-    # TODO: Side note for generating a random item: max(movie_id) > len(movie_ids)
-
-    # df_added = train_set.append(new_entries)
-    # # new_user_id_list = np.array(data.get_user_id_list() + new_user_ids)
-    #
-    # data_aug = Data(df_added, seed=42)
-    # model = SimpleCF()
-    # train_set, test_set, n_users, n_movies, userid2idx, itemid2idx = data_aug.pre_processing()
-    # model.set_model(n_users, n_movies, n_latent_factors=64)
-    # # train, valid, n_users, n_movies = low_rank_cf_model.model_preprocessing(df_added, new_user_id_list,
-    # #                                                                         data.get_movie_id_list())
-    # train_evalute_shilling_model(model, train_set, test_set, shilling_items, epochs=epochs)
-
 if __name__ == '__main__':
-    # x = fake_user_selected_one_item(10, 500, 500, False, 20)
     main()
 
-    # plot(list(range(100)), list(range(100)))
+
 
 
