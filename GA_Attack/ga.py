@@ -142,7 +142,7 @@ class FakeUserGeneticAlgorithm:
         mean = sum(fits) / length
         sum2 = sum(x * x for x in fits)
         std = abs(sum2 / length - mean ** 2) ** 0.5
-        print(f"G: {cur_generation} ; p_size: {length} ; min: {min(fits):.2f} ; max: {max(fits):.2f} ; avg: {mean:.2f} ; std: {std:.2f}")
+        print(f"G:{cur_generation}\tp_size:{length}\tmin:{min(fits):.2f}\tmax:{max(fits):.2f}\tavg:{mean:.2f}\tstd:{std:.2f}")
         # print(f"Best agent index: {np.argmax(fits)}")
 
 # TODO: When called from outside, still these parameters are used, need to find a way to change these

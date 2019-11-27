@@ -101,26 +101,27 @@ def fitness(agents, n_users, test_set, best_base_hr, best_base_ndcg):
     def eval_fitness_func(agent):
         with tf.Graph().as_default():  # workaround for tensorflow, each task creates a new graph
             with tf.Session().as_default():
-                batch_size = 512
-                model_copy = load_base_model()
-                attack_df = convert_attack_agent_to_input_df(agent)
-                malicious_training_set = create_training_instances_malicious(df=attack_df, user_item_matrix=agent.gnome,
-                                                                             n_users=n_users, num_negatives=4)
-                best_pert_model, best_hr, best_ndcg = train_evaluate_model(model_copy, malicious_training_set, test_set,
-                                                                           batch_size=batch_size,
-                                                                           epochs=MODEL_P_EPOCHS, verbose=VERBOSE)
-                delta_hr = best_base_hr - best_hr
-                delta_ndcg = best_base_ndcg - best_ndcg
-                agent_fitness = (2 * delta_hr * delta_ndcg) / (delta_hr + delta_ndcg)  # harmonic mean between deltas
-                if VERBOSE:
-                    print(f'agent_id: {agent.id} age: {agent.age} ; delta_hr: {delta_hr:0.2f} ; delta_ndcg: {delta_ndcg:0.2f} ; fitness: {agent_fitness: 0.3f}')
-                return agent_fitness
-                # return np.random.rand()
+                # batch_size = 512
+                # model_copy = load_base_model()
+                # attack_df = convert_attack_agent_to_input_df(agent)
+                # malicious_training_set = create_training_instances_malicious(df=attack_df, user_item_matrix=agent.gnome,
+                #                                                              n_users=n_users, num_negatives=4)
+                # best_pert_model, best_hr, best_ndcg = train_evaluate_model(model_copy, malicious_training_set, test_set,
+                #                                                            batch_size=batch_size,
+                #                                                            epochs=MODEL_P_EPOCHS, verbose=VERBOSE)
+                # delta_hr = best_base_hr - best_hr
+                # delta_ndcg = best_base_ndcg - best_ndcg
+                # agent_fitness = (2 * delta_hr * delta_ndcg) / (delta_hr + delta_ndcg)  # harmonic mean between deltas
+                # if VERBOSE:
+                #     print(f'id:{agent.id}\tage:{agent.age}\tΔ-hr:{delta_hr:0.2f}\tΔ-ndcg:{delta_ndcg:0.2f}\tf:{agent_fitness:0.3f}')
+                # return agent_fitness
+                return sum(sum(agent.gnome))
 
     fitness_list = list(executor.map(eval_fitness_func, agents))
     for idx , agent in enumerate(agents):
         agent.fitness = fitness_list[idx]
     return agents
+from datetime import datetime
 
 def main():
     # init_model()
@@ -138,18 +139,19 @@ def main():
 
     print('created n_agents', len(agents))
     ga.print_stats(agents, 0)
+    t0_s = time()
     for cur_generation in range(1, N_GENERATIONS):
         t0 = time()
         agents = fitness(agents, n_users, test_set, best_hr, best_ndcg)
         t1 = time() - t0
         if cur_generation % 3 == 0:
-            ga.print_stats(agents , cur_generation,)
+            ga.print_stats(agents, cur_generation,)
 
         agents = ga.selection(agents)
         agents = ga.crossover(agents, cur_generation)
         agents = ga.mutation(agents)
         t2 = time() - t0
-        print(f'G: {cur_generation}, fitness_time:[{t1:0.2f}s], overall_time: [{t2:0.2f}s]')
+        print(f'G:{cur_generation}\tfitness_time:[{t1:0.2f}s]\toverall_time:[{t2:0.2f}s]\telapsed:[{((time() - t0_s) / 60):0.2f}m]')
 
 
 
