@@ -115,6 +115,7 @@ def fitness(agents, n_users, test_set, best_base_hr, best_base_ndcg):
                 if VERBOSE:
                     print(f'agent_id: {agent.id} age: {agent.age} ; delta_hr: {delta_hr:0.2f} ; delta_ndcg: {delta_ndcg:0.2f} ; fitness: {agent_fitness: 0.3f}')
                 return agent_fitness
+                # return np.random.rand()
 
     fitness_list = list(executor.map(eval_fitness_func, agents))
     for idx , agent in enumerate(agents):

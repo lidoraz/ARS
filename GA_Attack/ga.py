@@ -62,7 +62,7 @@ class FakeUserGeneticAlgorithm:
     def selection(self, agents):
         # update age
         for agent in agents:
-            agent.age +=1
+            agent.age += 1
         # sort by fitness best to worse
         agents = sorted(agents, key=lambda x: x.fitness, reverse=True)
         # get 5% worst
@@ -115,13 +115,13 @@ class FakeUserGeneticAlgorithm:
             else:
                 return x
 
-        def bit_flip_func_non_binary(self, x):
+        def bit_flip_func_non_binary(x):
             if np.random.rand() < self.MUTATE_BIT_PROB:
                 return np.random.randint(1, 6)
             else:
                 return x
 
-        def flip_bit_1d_array(self, arr):
+        def flip_bit_1d_array(arr):
             if self.BINARY:
                 return list(map(bit_flip_func_binary, arr))
             else:
