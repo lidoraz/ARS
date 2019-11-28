@@ -46,7 +46,9 @@ MODEL_P_EPOCHS = 5 # Will take best model (in terms of highest HR and NDCG) if M
 TRAINING_SET_AGENT_FRAC = 0.05 # FRAC of training set for training the model
 # CONCURRENT = 4 # number of workers
 CONCURRENT = multiprocessing.cpu_count()
-VERBOSE = 2
+VERBOSE = 1
+# Verbose: 2 - print all in addition to iteration for each agent.
+
 
 
 def train_base_model():
