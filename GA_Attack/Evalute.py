@@ -22,13 +22,15 @@ from time import time
 
 from keras.models import clone_model
 
-MODEL_TAKE_BEST = False
-def train_evaluate_model(model, train_set, test_set, batch_size=256, epochs=5, verbose= 0):
+MODEL_TAKE_BEST = True
+# TODO: MODEL_TAKE_BEST? HOW TO MAKE IT?
+def train_evaluate_model(model, train_set, test_set, batch_size=256, epochs=5, baseline = False, verbose= 0, ):
     best_hr = 0
     best_ndcg = 0
     best_epoch = 0
     t0 = time()
-    mean_hr, mean_ndcg, _ = evaluate_model(model, test_set, verbose=verbose)
+    if baseline:
+        mean_hr, mean_ndcg, _ = evaluate_model(model, test_set, verbose=verbose)
     models = []
 
     for epoch in range(epochs):
@@ -48,8 +50,9 @@ def train_evaluate_model(model, train_set, test_set, batch_size=256, epochs=5, v
                   % (epoch + 1, t2 - t1, mean_hr, mean_ndcg, loss.history['loss'][0], time_eval))
         # TODO: CHANGED HERE FOR ATLEAST 2 EPOCHS, takeing the first epoch does not change because learning rate is small
 
-        if MODEL_TAKE_BEST:
-            if mean_hr > best_hr and mean_ndcg > best_ndcg and epoch > 0:
+        if MODEL_TAKE_BEST or baseline:
+            if mean_hr > best_hr and epoch > 0:
+            # if mean_hr > best_hr or mean_ndcg > best_ndcg and epoch > 0:
                 best_hr = mean_hr
                 best_ndcg = mean_ndcg
                 best_epoch = epoch
@@ -58,6 +61,12 @@ def train_evaluate_model(model, train_set, test_set, batch_size=256, epochs=5, v
             best_ndcg = mean_ndcg
             best_epoch = epoch
 
+    for idx, model in enumerate(models):
+        if idx == best_epoch:
+            continue
+        del model
+    if not baseline:
+        del train_set
     return models[best_epoch], best_hr, best_ndcg
 
 import matplotlib.pyplot as plt

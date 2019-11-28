@@ -80,6 +80,7 @@ class FakeUserGeneticAlgorithm:
     # TODO: Extend cross-over between pairs
     def crossover(self, agents, cur_generation):
         # Simple Cross-over between 2 agents, creates 2 offsprings.
+        # or even create cross between multiple agents
         # Improve this to have a tournement like.
         agent_1_part_prefix = agents[0].gnome[:agents[0].gnome.shape[0]//2]
         agent_1_part_postfix = agents[0].gnome[agents[0].gnome.shape[0] // 2:]
@@ -105,7 +106,7 @@ class FakeUserGeneticAlgorithm:
 
     def mutation(self, agents):
         # mutation utility functions
-        def bit_flip_func_binary(self, x):
+        def bit_flip_func_binary(x):
             # bits = [1, 0]
             if np.random.rand() < self.MUTATE_BIT_PROB:
                 if x == 0:
@@ -128,13 +129,13 @@ class FakeUserGeneticAlgorithm:
                 return list(map(bit_flip_func_non_binary, arr))
         for agent in agents:
             if np.random.rand() < self.MUTATE_USER_PROB:
-                agent.gnome = np.apply_along_axis(flip_bit_1d_array, 0, arr=agent.gnome)
+                agent.gnome = np.apply_along_axis(func1d=flip_bit_1d_array, axis=0, arr=agent.gnome)
                 agent.generations_mutated += 1
         # flip bit in an entry in a prob
         # this will work on every entry, to create stohastic behaviour, kind of epsilon greedy method.
         return agents
 
-    def print_stats(self, agents, cur_generation):
+    def get_stats(self, agents):
         # Gather all the fitnesses in one list and print the stats
         fits = [ind.fitness for ind in agents]
 
@@ -142,7 +143,8 @@ class FakeUserGeneticAlgorithm:
         mean = sum(fits) / length
         sum2 = sum(x * x for x in fits)
         std = abs(sum2 / length - mean ** 2) ** 0.5
-        print(f"G:{cur_generation}\tp_size:{length}\tmin:{min(fits):.2f}\tmax:{max(fits):.2f}\tavg:{mean:.2f}\tstd:{std:.2f}")
+        return length, min(fits), max(fits), mean, std
+        # print(f"G:{cur_generation}\tp_size:{length}\tmin:{min(fits):.2f}\tmax:{max(fits):.2f}\tavg:{mean:.2f}\tstd:{std:.2f}")
         # print(f"Best agent index: {np.argmax(fits)}")
 
 # TODO: When called from outside, still these parameters are used, need to find a way to change these
