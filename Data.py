@@ -34,11 +34,17 @@ def create_training_instances_malicious(df,  user_item_matrix, n_users, num_nega
     # print('len(training_set):', len(training_set))
     return training_set
 
-def concat_and_shuffle(malicious_training_set, train_set, train_frac = 1.0):
+def create_subset(train_set, train_frac = 1.0):
     n_train_set_items = int(len(train_set[0]) * train_frac)
-    attack_benign_training_set = (np.concatenate([malicious_training_set[0], train_set[0][:n_train_set_items]]),
-                                  np.concatenate([malicious_training_set[1], train_set[1][:n_train_set_items]]),
-                                  np.concatenate([malicious_training_set[2], train_set[2][:n_train_set_items]]))
+    subset = (train_set[0][:n_train_set_items],
+                train_set[0][:n_train_set_items],
+                train_set[0][:n_train_set_items])
+    print(f"Train each agent with {train_frac:0.5f}: {int(train_frac * len(train_set[0]))} real training samples.")
+    return subset
+def concat_and_shuffle(malicious_training_set, train_set):
+    attack_benign_training_set = (np.concatenate([malicious_training_set[0], train_set[0]]),
+                                  np.concatenate([malicious_training_set[1], train_set[1]]),
+                                  np.concatenate([malicious_training_set[2], train_set[2]]))
     p = np.random.permutation(len(attack_benign_training_set[0]))
     attack_benign_training_set = (attack_benign_training_set[0][p],
                                   attack_benign_training_set[1][p],
