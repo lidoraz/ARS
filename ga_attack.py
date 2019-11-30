@@ -29,7 +29,7 @@ BASE_MODEL_DIR = 'base_models'
 
 #GA Hyperparams:
 POP_SIZE = 30
-N_GENERATIONS = 500
+N_GENERATIONS = 1000
 # Mutation
 MUTATE_USER_PROB = 0.5  # prob for choosing an individual
 MUTATE_BIT_PROB = 0.01  # prob for flipping a bit
@@ -42,20 +42,22 @@ CROSSOVER_TOP = 4  # Select top # to create pairs of offsprings.
 # Model / Dataset related
 N_FAKE_USERS = 10
 # N_ITEMS = -1 # initiated later
-POS_RATIO = 0.02  # Ratio pos/ neg ratio  one percent from each user
+
+
 
 # Dataset Related
 CONVERT_BINARY = True
 DATASET_NAME = ml100k
 TEST_SET_PERCENTAGE = 1
-
-# TODO: These params effect the most
-PERT_MODEL_TAKE_BEST = False
 BASE_MODEL_EPOCHS = 15  # will get the best model out of these n epochs.
+
+# Attack hyperparams:
+PERT_MODEL_TAKE_BEST = False
 MODEL_P_EPOCHS = 3  # Will take best model (in terms of highest HR and NDCG) if MODEL_TAKE_BEST is set to true
 TRAINING_SET_AGENT_FRAC = 0.01  # FRAC of training set for training the model
+POS_RATIO = 0.02  # Ratio pos/ neg ratio  one percent from each user
 
-CONCURRENT = 1 # number of workers
+CONCURRENT = 4 # number of workers
 # CONCURRENT = multiprocessing.cpu_count()
 VERBOSE = 1
 
@@ -79,7 +81,6 @@ def train_base_model():
     reg_mf = 0
     learning_rate = 0.001
     batch_size = 512
-    verbose = 2
     loss_func = 'binary_crossentropy'
 
     model = get_model(n_users_w_mal, n_movies, mf_dim, layers, reg_layers, reg_mf)
@@ -155,9 +156,7 @@ def _fitness_concurrent(agents, n_users, train_set, test_set, best_base_hr, best
     executor = ThreadPoolExecutor(max_workers=CONCURRENT)
 
     def eval_fitness_func(agent):
-        # with tf.Graph().as_default():  # workaround for tensorflow, each task creates a new graph
-        #     with tf.Session().as_default():
-        with tf.Session(graph=tf.Graph()) as sess:
+        with tf.Session(graph=tf.Graph()) as sess:# workaround for tensorflow, each task creates a new graph
             K.set_session(sess)
             return __get_fitness(agent, n_users, train_set, test_set, best_base_hr, best_base_ndcg)
 
@@ -197,6 +196,7 @@ def main():
 
     agents = ga.init_agents(N_FAKE_USERS, N_ITEMS)
     print('created n_agents', len(agents))
+    print(f"Train each agent with {(TRAINING_SET_AGENT_FRAC) *100 :0.3f}: {int(TRAINING_SET_AGENT_FRAC * len(train_set[0]))} real training samples.")
     t0 = time()
     t3 = 0
     for cur_generation in range(1, N_GENERATIONS):
@@ -210,6 +210,7 @@ def main():
               f"avg:{mean:.4f}\tstd:{std:.4f}\t"f"fit[{t2:0.2f}s]\t"
               f"g:[{t3:0.2f}s]\tall:[{t4:0.2f}m]")
         ga.save(agents, cur_generation)
+
         agents = ga.selection(agents)
         agents = ga.crossover(agents, cur_generation)
         agents = ga.mutation(agents)

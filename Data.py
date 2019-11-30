@@ -47,7 +47,6 @@ def create_subset(train_set, train_frac = 1.0):
     subset = (train_set[0][indexes],
               train_set[1][indexes],
               train_set[2][indexes])
-    print(f"Train each agent with {train_frac:0.5f}: {int(train_frac * len(train_set[0]))} real training samples.")
     return subset
 def concat_and_shuffle(malicious_training_set, train_set):
     attack_benign_training_set = (np.concatenate([malicious_training_set[0], train_set[0]]),
@@ -147,7 +146,7 @@ class Data():
         self.n_users = df_reindexed['user_id'].max() + 1
         self.n_movies = df_reindexed['movie_id'].max() + 1
         print('n_users:', self.n_users, 'n_movies:', self.n_movies)
-        # TODO: look where to put this
+
         self.user_item_matrix_reindexed = pd.pivot_table(data=df_reindexed, values='rating', index='user_id', columns='movie_id').fillna(0)
         df_reindexed_removed_recents, most_recent_entries = self._filter_trainset(df_reindexed)
         training_set = self.get_train_instances(df_reindexed_removed_recents, num_negatives=4, percent=train_precent)
