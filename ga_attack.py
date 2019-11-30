@@ -209,13 +209,15 @@ def main():
         print(f"G:{cur_generation}\tp_size:{pool_size}\tmin:{min_fit:.4f}\tmax:{max_fit:.4f}\t"
               f"avg:{mean:.4f}\tstd:{std:.4f}\t"f"fit[{t2:0.2f}s]\t"
               f"g:[{t3:0.2f}s]\tall:[{t4:0.2f}m]")
-        ga.save(agents, cur_generation)
+
+        if cur_generation % 100 == 0:
+            ga.save(agents, cur_generation)
 
         agents = ga.selection(agents)
         agents = ga.crossover(agents, cur_generation)
         agents = ga.mutation(agents)
         t3 = time() - t1
-
+    ga.save(agents, N_GENERATIONS)
         # print(f'G:{cur_generation}\tfitness_:[{t1:0.2f}s]\toverall_time:[{t2:0.2f}s]\telapsed:[{((time() - t0_s) / 60):0.2f}m]')
 
 
