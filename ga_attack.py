@@ -61,7 +61,7 @@ CONCURRENT = 4 # number of workers
 # CONCURRENT = multiprocessing.cpu_count()
 VERBOSE = 1
 
-
+np.random.seed(42)
 # Verbose: 2 - print all in addition to iteration for each agent.
 
 
@@ -142,7 +142,8 @@ def __get_fitness(agent, n_users, train_set, test_set, best_base_hr, best_base_n
                                                                               verbose=VERBOSE)
     delta_hr = best_base_hr - best_pert_hr
     delta_ndcg = best_base_ndcg - best_pert_ndcg
-    agent_fitness = (2 * delta_hr * delta_ndcg) / (delta_hr + delta_ndcg)  # harmonic mean between deltas
+    agent_fitness = delta_hr
+    # agent_fitness = (2 * delta_hr * delta_ndcg) / (delta_hr + delta_ndcg)  # harmonic mean between deltas
     if VERBOSE:
         beign_malicious_ratio = len(train_set[0]) / len(malicious_training_set[0])
         print(f'id:{agent.id}\tratio:{beign_malicious_ratio:0.2f}\tage:{agent.age}\tΔhr:{delta_hr:0.4f}\tΔndcg:{delta_ndcg:0.4f}\tf:{agent_fitness:0.4f}')
@@ -150,34 +151,47 @@ def __get_fitness(agent, n_users, train_set, test_set, best_base_hr, best_base_n
     # return sum(sum(agent.gnome))
 
 
-def _fitness_concurrent(agents, n_users, train_set, test_set, best_base_hr, best_base_ndcg):
+def fitness(agents, n_users, train_set, test_set, best_base_hr, best_base_ndcg):
+    """
+    Runs concurrent...
+    :param agents:
+    :param n_users:
+    :param train_set:
+    :param test_set:
+    :param best_base_hr:
+    :param best_base_ndcg:
+    :return:
+    """
     from concurrent.futures.thread import ThreadPoolExecutor
     import tensorflow as tf
     executor = ThreadPoolExecutor(max_workers=CONCURRENT)
 
     def eval_fitness_func(agent):
-        with tf.Session(graph=tf.Graph()) as sess:# workaround for tensorflow, each task creates a new graph
+        # workaround for tensorflow, each task creates a new graph
+        with tf.Session(graph=tf.Graph()) as sess:
             K.set_session(sess)
             return __get_fitness(agent, n_users, train_set, test_set, best_base_hr, best_base_ndcg)
 
     fitness_list = list(executor.map(eval_fitness_func, agents))
     for idx, agent in enumerate(agents):
         agent.fitness = fitness_list[idx]
-
     return agents
 
 
-def _fitness_single(agents, n_users, train_set, test_set, best_base_hr, best_base_ndcg):
-    for agent in tqdm(agents, total=len(agents)):
-        agent.fitness = __get_fitness(agent, n_users, train_set, test_set, best_base_hr, best_base_ndcg)
-    return agents
+# def _fitness_single(agents, n_users, train_set, test_set, best_base_hr, best_base_ndcg):
+#     for agent in tqdm(agents, total=len(agents)):
+#         agent_fitness, agent_d_hr, agent_d_ndcg = __get_fitness(agent, n_users, train_set, test_set, best_base_hr, best_base_ndcg)
+#         agent.fitness = agent_fitness
+#         agent.d_hr = agent_d_hr
+#         agent.d_ndcg = agent_d_ndcg
+#     return agents
 
-
-def fitness(agents, n_users, train_set, test_set, best_base_hr, best_base_ndcg):
-    if CONCURRENT:
-        return _fitness_concurrent(agents, n_users, train_set, test_set, best_base_hr, best_base_ndcg)
-    else:
-        return _fitness_single(agents, n_users, train_set, test_set, best_base_hr, best_base_ndcg)
+#
+# def fitness(agents, n_users, train_set, test_set, best_base_hr, best_base_ndcg):
+#     # if CONCURRENT:
+#     return _fitness_concurrent(agents, n_users, train_set, test_set, best_base_hr, best_base_ndcg)
+    # else:
+    #     return _fitness_single(agents, n_users, train_set, test_set, best_base_hr, best_base_ndcg)
 
 
 def main():
