@@ -35,10 +35,18 @@ def create_training_instances_malicious(df,  user_item_matrix, n_users, num_nega
     return training_set
 
 def create_subset(train_set, train_frac = 1.0):
-    n_train_set_items = int(len(train_set[0]) * train_frac)
-    subset = (train_set[0][:n_train_set_items],
-                train_set[0][:n_train_set_items],
-                train_set[0][:n_train_set_items])
+    """
+    Samples a subset from training set with provided frac
+    :param train_set:
+    :param train_frac:
+    :return:
+    """
+    train_set_len = len(train_set[0])
+    n_train_set_items = int(train_set_len * train_frac)
+    indexes = np.random.choice(np.arange(train_set_len), n_train_set_items, replace=False)
+    subset = (train_set[0][indexes],
+              train_set[1][indexes],
+              train_set[2][indexes])
     print(f"Train each agent with {train_frac:0.5f}: {int(train_frac * len(train_set[0]))} real training samples.")
     return subset
 def concat_and_shuffle(malicious_training_set, train_set):

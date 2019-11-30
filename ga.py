@@ -1,6 +1,6 @@
 import numpy as np
 import uuid
-
+from itertools import combinations
 
 class AttackAgent:
     def __init__(self, n_m_users=0, n_items=0, gnome=None, d_birth=0, POS_RATIO=1, BINARY = True):
@@ -28,7 +28,8 @@ class AttackAgent:
             self.gnome = gnome
 
 class FakeUserGeneticAlgorithm:
-    def __init__(self, POP_SIZE, N_GENERATIONS, GENERATIONS_BEFORE_REMOVAL, REMOVE_PERCENTILE, MUTATE_USER_PROB, MUTATE_BIT_PROB, BINARY, POS_RATIO):
+    def __init__(self, POP_SIZE, N_GENERATIONS, GENERATIONS_BEFORE_REMOVAL,
+                 REMOVE_PERCENTILE, MUTATE_USER_PROB, MUTATE_BIT_PROB, BINARY, POS_RATIO,CROSSOVER_TOP):
         self.POP_SIZE = POP_SIZE
         self.N_GENERATIONS = N_GENERATIONS
         self.GENERATIONS_BEFORE_REMOVAL = GENERATIONS_BEFORE_REMOVAL
@@ -37,6 +38,7 @@ class FakeUserGeneticAlgorithm:
         self.MUTATE_BIT_PROB = MUTATE_BIT_PROB
         self.BINARY = BINARY
         self.POS_RATIO = POS_RATIO
+        self.CROSSOVER_TOP = CROSSOVER_TOP
 
     def init_agents(self, n_m_users, n_items):
         return [AttackAgent(n_m_users, n_items, POS_RATIO=self.POS_RATIO, BINARY=self.BINARY) for _ in range(self.POP_SIZE)]
@@ -77,33 +79,41 @@ class FakeUserGeneticAlgorithm:
         # sort by fitness, take 2 best agents
         # keep best one in pool
 
+    @staticmethod
+    def pair_crossover(agent1, agent2, cur_generation):
+        """
+        Make 2 offsprings from 2 best agents
+        the cross over will take bunch of users from each attack, and mix them up together,
+        the cross over will not change the ratings themselvs, only the rows.
+        make also with the hall of fame
+        :param agent1:
+        :param agent2:
+        :param cur_generation:
+        :return:
+        """
+        agent_1_part_prefix = agent1.gnome[:agent1.gnome.shape[0] // 2]
+        agent_1_part_postfix = agent1.gnome[agent1.gnome.shape[0] // 2:]
+        agent_2_part_prefix = agent2.gnome[:agent2.gnome.shape[0] // 2]
+        agent_2_part_postfix = agent2.gnome[agent2.gnome.shape[0] // 2:]
+        offspring_1 = AttackAgent(gnome=np.concatenate([agent_1_part_prefix, agent_2_part_postfix]), d_birth= cur_generation)
+        offspring_2 = AttackAgent(gnome=np.concatenate([agent_2_part_prefix, agent_1_part_postfix]), d_birth= cur_generation)
+        return offspring_1, offspring_2
     # TODO: Extend cross-over between pairs
-    def crossover(self, agents, cur_generation):
-        # Simple Cross-over between 2 agents, creates 2 offsprings.
-        # or even create cross between multiple agents
-        # Improve this to have a tournement like.
-        agent_1_part_prefix = agents[0].gnome[:agents[0].gnome.shape[0]//2]
-        agent_1_part_postfix = agents[0].gnome[agents[0].gnome.shape[0] // 2:]
-        agent_2_part_prefix = agents[1].gnome[:agents[1].gnome.shape[0]//2]
-        agent_2_part_postfix = agents[1].gnome[agents[1].gnome.shape[0] // 2:]
-        offspring_1 = np.concatenate([agent_1_part_prefix, agent_2_part_postfix])
-        offspring_2 = np.concatenate([agent_2_part_prefix, agent_1_part_postfix])
-        offspring_1 = AttackAgent(gnome=offspring_1, d_birth= cur_generation)
-        offspring_2 = AttackAgent(gnome=offspring_2, d_birth= cur_generation)
 
-        # add offsprints and remove worst
-        agents.append(offspring_1)
-        agents.append(offspring_2)
+    def crossover(self, agents, cur_generation):
+        if self.CROSSOVER_TOP:
+            top_candidates = agents[:self.CROSSOVER_TOP]
+            for pair in combinations(top_candidates, 2):
+                offspring_1, offspring_2 = self.pair_crossover(pair[0], pair[1], cur_generation)
+                agents.append(offspring_1)
+                agents.append(offspring_2)
+        else:
+            # Simple Cross-over between 2 agents, creates 2 offsprings.
+            offspring_1, offspring_2 = self.pair_crossover(agents[0], agents[1], cur_generation)
+            agents.append(offspring_1)
+            agents.append(offspring_2)
         return agents
     # return offspring_1, offspring_2
-
-    # Make 2 offsprings from 2 best agents
-    # the cross over will take bunch of users from each attack, and mix them up together,
-    # the cross over will not change the ratings themselvs, only the rows.
-#   # make also with the hall of fame
-
-
-
     def mutation(self, agents):
         # mutation utility functions
         def bit_flip_func_binary(x):
@@ -135,7 +145,8 @@ class FakeUserGeneticAlgorithm:
         # this will work on every entry, to create stohastic behaviour, kind of epsilon greedy method.
         return agents
 
-    def get_stats(self, agents):
+    @staticmethod
+    def get_stats(agents):
         # Gather all the fitnesses in one list and print the stats
         fits = [ind.fitness for ind in agents]
 
@@ -146,6 +157,13 @@ class FakeUserGeneticAlgorithm:
         return length, min(fits), max(fits), mean, std
         # print(f"G:{cur_generation}\tp_size:{length}\tmin:{min(fits):.2f}\tmax:{max(fits):.2f}\tavg:{mean:.2f}\tstd:{std:.2f}")
         # print(f"Best agent index: {np.argmax(fits)}")
+
+    @staticmethod
+    def save(agents, cur_generation, save_dir='agents'):
+        import pickle
+        import os
+        pickle.dump(agents, open(os.path.join(save_dir, f'g_{cur_generation}_agents_{len(agents)}_dump.dmp'), 'wb'))
+
 
 # TODO: When called from outside, still these parameters are used, need to find a way to change these
 # TODO: need those parameters from lambda functions.

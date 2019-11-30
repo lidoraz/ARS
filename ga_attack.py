@@ -19,12 +19,15 @@ import tensorflow as tf
 from keras.models import model_from_json
 
 tf.logging.set_verbosity(tf.logging.ERROR)
+
 ml1m = 'movielens1m'
 ml100k = 'movielens100k'
 
 BASE_MODEL_DIR = 'base_models'
 
 # HYPER-PARAMETERS
+
+#GA Hyperparams:
 POP_SIZE = 30
 N_GENERATIONS = 500
 # Mutation
@@ -33,6 +36,8 @@ MUTATE_BIT_PROB = 0.01  # prob for flipping a bit
 # Selection
 SELECTION_GENERATIONS_BEFORE_REMOVAL = 5
 SELECTION_REMOVE_PERCENTILE = 0.05  # remove only worst 5%
+# Crossover
+CROSSOVER_TOP = 4  # Select top # to create pairs of offsprings.
 
 # Model / Dataset related
 N_FAKE_USERS = 10
@@ -49,6 +54,7 @@ PERT_MODEL_TAKE_BEST = False
 BASE_MODEL_EPOCHS = 15  # will get the best model out of these n epochs.
 MODEL_P_EPOCHS = 3  # Will take best model (in terms of highest HR and NDCG) if MODEL_TAKE_BEST is set to true
 TRAINING_SET_AGENT_FRAC = 0.01  # FRAC of training set for training the model
+
 CONCURRENT = 1 # number of workers
 # CONCURRENT = multiprocessing.cpu_count()
 VERBOSE = 1
@@ -184,13 +190,10 @@ def main():
     N_ITEMS = n_movies
 
     print("ADVERSRIAL PHASE")
-
-    train_set_subset = create_subset(train_set, train_frac=TRAINING_SET_AGENT_FRAC)
-
     # print(AttackAgent(N_FAKE_USERS, N_ITEMS).gnome)
     ga = FakeUserGeneticAlgorithm(POP_SIZE, N_GENERATIONS, SELECTION_GENERATIONS_BEFORE_REMOVAL,
                                   SELECTION_REMOVE_PERCENTILE,
-                                  MUTATE_USER_PROB, MUTATE_BIT_PROB, CONVERT_BINARY, POS_RATIO)
+                                  MUTATE_USER_PROB, MUTATE_BIT_PROB, CONVERT_BINARY, POS_RATIO, CROSSOVER_TOP)
 
     agents = ga.init_agents(N_FAKE_USERS, N_ITEMS)
     print('created n_agents', len(agents))
@@ -198,14 +201,15 @@ def main():
     t3 = 0
     for cur_generation in range(1, N_GENERATIONS):
         t1 = time()
+        train_set_subset = create_subset(train_set, train_frac=TRAINING_SET_AGENT_FRAC)
         agents = fitness(agents, n_users, train_set_subset, test_set, best_hr, best_ndcg)
         t2 = time() - t1
         t4 = (time() - t0) / 60
         pool_size, min_fit, max_fit, mean, std = ga.get_stats(agents)
-        print(f"G:{cur_generation}\tp_size:{pool_size}\tmin:{min_fit:.2f}\tmax:{max_fit:.2f}\t"
-              f"avg:{mean:.2f}\tstd:{std:.2f}\t"f"fit[{t2:0.2f}s]\t"
+        print(f"G:{cur_generation}\tp_size:{pool_size}\tmin:{min_fit:.4f}\tmax:{max_fit:.4f}\t"
+              f"avg:{mean:.4f}\tstd:{std:.4f}\t"f"fit[{t2:0.2f}s]\t"
               f"g:[{t3:0.2f}s]\tall:[{t4:0.2f}m]")
-
+        ga.save(agents, cur_generation)
         agents = ga.selection(agents)
         agents = ga.crossover(agents, cur_generation)
         agents = ga.mutation(agents)
