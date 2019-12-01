@@ -1,5 +1,6 @@
 import os
 import multiprocessing
+import resource
 from Data import convert_attack_agent_to_input_df
 
 os.environ['RUN_MODE'] = '4'
@@ -54,11 +55,11 @@ BASE_MODEL_EPOCHS = 15  # will get the best model out of these n epochs.
 # Attack hyperparams:
 PERT_MODEL_TAKE_BEST = False
 MODEL_P_EPOCHS = 3  # Will take best model (in terms of highest HR and NDCG) if MODEL_TAKE_BEST is set to true
-TRAINING_SET_AGENT_FRAC = 0.01  # FRAC of training set for training the model
+TRAINING_SET_AGENT_FRAC = 1.0  # FRAC of training set for training the model
 POS_RATIO = 0.02  # Ratio pos/ neg ratio  one percent from each user
 
-CONCURRENT = 4 # number of workers
-# CONCURRENT = multiprocessing.cpu_count()
+# CONCURRENT = 4 # number of workers
+CONCURRENT = multiprocessing.cpu_count()
 VERBOSE = 1
 
 np.random.seed(42)
@@ -220,9 +221,10 @@ def main():
         t2 = time() - t1
         t4 = (time() - t0) / 60
         pool_size, min_fit, max_fit, mean, std = ga.get_stats(agents)
+        max_mem_usage = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / (10 ** 9)
         print(f"G:{cur_generation}\tp_size:{pool_size}\tmin:{min_fit:.4f}\tmax:{max_fit:.4f}\t"
               f"avg:{mean:.4f}\tstd:{std:.4f}\t"f"fit[{t2:0.2f}s]\t"
-              f"g:[{t3:0.2f}s]\tall:[{t4:0.2f}m]")
+              f"g:[{t3:0.2f}s]\tall:[{t4:0.2f}m]\tmax_mem_usage:{max_mem_usage: 0.3} GB")
 
         if cur_generation % 100 == 0:
             ga.save(agents, cur_generation)
