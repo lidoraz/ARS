@@ -15,6 +15,8 @@ This class takes the loaded movie_lens DataFrame and generates:
 * Utility functions user_id / movie_id to index
 """
 
+from Constants import SEED
+np.random.seed(SEED)
 
 def create_training_instances_malicious(df,  user_item_matrix, n_users, num_negatives= 4):
     user_input, item_input, labels = [], [], []

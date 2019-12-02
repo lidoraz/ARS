@@ -2,11 +2,21 @@ import numpy as np
 import uuid
 from itertools import combinations
 
+"""
+Generic FakeUserGeneticAlgorithm class
+
+supports init , selection, crossover mutation
+need only to create a fitness function, and assign a fitness value for each agent
+
+"""
+
+
+
 class AttackAgent:
     def __init__(self, n_m_users=0, n_items=0, gnome=None, d_birth=0, POS_RATIO=1, BINARY = True):
         if gnome is not None and ( n_items != 0 or n_items != 0 or d_birth == 0 or POS_RATIO != 1):
             raise ValueError('not valid config')
-        self.fitness = .0
+        self.fitness = -42  # fitness is always between -1 to 1.
         # self.is_fame = False
         self.evaluted = False
         self.d_birth = d_birth
@@ -28,20 +38,26 @@ class AttackAgent:
             self.gnome = gnome
 
 class FakeUserGeneticAlgorithm:
-    def __init__(self, POP_SIZE, N_GENERATIONS, GENERATIONS_BEFORE_REMOVAL,
-                 REMOVE_PERCENTILE, MUTATE_USER_PROB, MUTATE_BIT_PROB, BINARY, POS_RATIO,CROSSOVER_TOP):
+    def __init__(self, POP_SIZE,MAX_POP_SIZE, N_GENERATIONS, SELECTION_GENERATIONS_BEFORE_REMOVAL,
+                 SELECTION_REMOVE_PERCENTILE, MUTATE_USER_PROB, MUTATE_BIT_PROB, CONVERT_BINARY, POS_RATIO,CROSSOVER_CREATE_TOP):
+
         self.POP_SIZE = POP_SIZE
+        self.MAX_POP_SIZE = MAX_POP_SIZE
         self.N_GENERATIONS = N_GENERATIONS
-        self.GENERATIONS_BEFORE_REMOVAL = GENERATIONS_BEFORE_REMOVAL
-        self.REMOVE_PERCENTILE = REMOVE_PERCENTILE
+        self.SELECTION_GENERATIONS_BEFORE_REMOVAL = SELECTION_GENERATIONS_BEFORE_REMOVAL
+        self.SELECTION_REMOVE_PERCENTILE = SELECTION_REMOVE_PERCENTILE
         self.MUTATE_USER_PROB = MUTATE_USER_PROB
         self.MUTATE_BIT_PROB = MUTATE_BIT_PROB
-        self.BINARY = BINARY
+        self.CONVERT_BINARY = CONVERT_BINARY
         self.POS_RATIO = POS_RATIO
-        self.CROSSOVER_TOP = CROSSOVER_TOP
+        self.CROSSOVER_CREATE_TOP = CROSSOVER_CREATE_TOP
+
+        print("Created 'FakeUserGeneticAlgorithm with 'Elitism' - best individual will not be mutated")
+
+
 
     def init_agents(self, n_m_users, n_items):
-        return [AttackAgent(n_m_users, n_items, POS_RATIO=self.POS_RATIO, BINARY=self.BINARY) for _ in range(self.POP_SIZE)]
+        return [AttackAgent(n_m_users, n_items, POS_RATIO=self.POS_RATIO, BINARY=self.CONVERT_BINARY) for _ in range(self.POP_SIZE)]
 
 
     def fitness(self, agents):
@@ -68,11 +84,8 @@ class FakeUserGeneticAlgorithm:
         # sort by fitness best to worse
         agents = sorted(agents, key=lambda x: x.fitness, reverse=True)
         # get 5% worst
-        fitness_treshold = agents[int((1-self.REMOVE_PERCENTILE) * len(agents))].fitness
-        # agents_removed_worst = [a for a in agents if a.fitness > fitness_treshold and curr_generation - a.d_birth < GENERATIONS_BEFORE_REMOVAL]
-
-        remove_func = lambda x: x.age < self.GENERATIONS_BEFORE_REMOVAL or x.fitness < fitness_treshold
-
+        fitness_treshold = agents[int((1-self.SELECTION_REMOVE_PERCENTILE) * len(agents))].fitness
+        remove_func = lambda x: x.age < self.SELECTION_GENERATIONS_BEFORE_REMOVAL or x.fitness < fitness_treshold
         agents_removed_worst = list(filter(remove_func, agents))
         return agents_removed_worst
 
@@ -98,21 +111,19 @@ class FakeUserGeneticAlgorithm:
         offspring_1 = AttackAgent(gnome=np.concatenate([agent_1_part_prefix, agent_2_part_postfix]), d_birth= cur_generation)
         offspring_2 = AttackAgent(gnome=np.concatenate([agent_2_part_prefix, agent_1_part_postfix]), d_birth= cur_generation)
         return offspring_1, offspring_2
-    # TODO: Extend cross-over between pairs
 
     def crossover(self, agents, cur_generation):
-        if self.CROSSOVER_TOP:
-            top_candidates = agents[:self.CROSSOVER_TOP]
-            for pair in combinations(top_candidates, 2):
-                offspring_1, offspring_2 = self.pair_crossover(pair[0], pair[1], cur_generation)
-                agents.append(offspring_1)
-                agents.append(offspring_2)
-        else:
-            # Simple Cross-over between 2 agents, creates 2 offsprings.
-            offspring_1, offspring_2 = self.pair_crossover(agents[0], agents[1], cur_generation)
-            agents.append(offspring_1)
-            agents.append(offspring_2)
-        return agents
+        new_agents = []
+        top_candidates = agents[:self.CROSSOVER_CREATE_TOP]
+        for pair in combinations(top_candidates, 2):
+            offspring_1, offspring_2 = self.pair_crossover(pair[0], pair[1], cur_generation)
+            new_agents.append(offspring_1)
+            new_agents.append(offspring_2)
+        agents = new_agents + agents
+        if self.MAX_POP_SIZE:
+            agents = agents[:self.MAX_POP_SIZE]
+
+        return agents, len(new_agents)
     # return offspring_1, offspring_2
     def mutation(self, agents):
         # mutation utility functions
@@ -133,14 +144,18 @@ class FakeUserGeneticAlgorithm:
                 return x
 
         def flip_bit_1d_array(arr):
-            if self.BINARY:
+            if self.CONVERT_BINARY:
                 return list(map(bit_flip_func_binary, arr))
             else:
                 return list(map(bit_flip_func_non_binary, arr))
-        for agent in agents:
+
+        # sort by fitness best to worse - sort again because we added new agents to start
+        agents = sorted(agents, key=lambda x: x.fitness, reverse=True)
+        for agent in agents[1:]:
             if np.random.rand() < self.MUTATE_USER_PROB:
                 agent.gnome = np.apply_along_axis(func1d=flip_bit_1d_array, axis=0, arr=agent.gnome)
                 agent.generations_mutated += 1
+                agent.evaluted = False
         # flip bit in an entry in a prob
         # this will work on every entry, to create stohastic behaviour, kind of epsilon greedy method.
         return agents
@@ -159,50 +174,43 @@ class FakeUserGeneticAlgorithm:
         # print(f"Best agent index: {np.argmax(fits)}")
 
     @staticmethod
-    def save(agents, cur_generation, save_dir='agents'):
+    def save(agents,n_fake_users, cur_generation, save_dir='agents'):
         import pickle
         import os
-        pickle.dump(agents, open(os.path.join(save_dir, f'g_{cur_generation}_agents_{len(agents)}_dump.dmp'), 'wb'))
+        pickle.dump(agents, open(os.path.join(save_dir, f'g_{cur_generation}_n_fake{n_fake_users}_agents{len(agents)}_dump.dmp'), 'wb'))
 
-
-# TODO: When called from outside, still these parameters are used, need to find a way to change these
-# TODO: need those parameters from lambda functions.
-
-
-
-
-def main():
-    # HYPER-PARAMETERS
-    POP_SIZE = 100
-    N_GENERATIONS = 1000
-    # Mutation
-    MUTATE_USER_PROB = 0.2  # prob for choosing an individual
-    MUTATE_BIT_PROB = 0.01  # prob for flipping a bit
-    # Selection
-    GENERATIONS_BEFORE_REMOVAL = 50
-    REMOVE_PERCENTILE = 0.05  # remove only worst 5%
-
-    # Model / Dataset related
-    N_FAKE_USERS = 9
-    N_ITEMS = 7
-    BINARY = False  # binary or non binary data
-    POS_RATIO = 0.1  # Ratio pos/ neg ratio  one percent from each user
-
-    print(AttackAgent(N_FAKE_USERS, N_ITEMS).gnome)
-    ga = FakeUserGeneticAlgorithm(POP_SIZE, N_GENERATIONS, GENERATIONS_BEFORE_REMOVAL, REMOVE_PERCENTILE, MUTATE_USER_PROB, MUTATE_BIT_PROB, BINARY, POS_RATIO)
-
-    agents = ga.init_agents(N_FAKE_USERS, N_ITEMS)
-
-    print('created n_agents', len(agents))
-    ga.print_stats(agents, 0)
-    for cur_generation in range(1, N_GENERATIONS):
-        agents = ga.fitness(agents)
-        if cur_generation % 50 == 0:
-            ga.print_stats(agents , cur_generation)
-
-        agents = ga.selection(agents)
-        agents = ga.crossover(agents, cur_generation)
-        agents = ga.mutation(agents)
+# def main():
+    # # HYPER-PARAMETERS
+    # POP_SIZE = 100
+    # N_GENERATIONS = 1000
+    # # Mutation
+    # MUTATE_USER_PROB = 0.2  # prob for choosing an individual
+    # MUTATE_BIT_PROB = 0.01  # prob for flipping a bit
+    # # Selection
+    # GENERATIONS_BEFORE_REMOVAL = 50
+    # REMOVE_PERCENTILE = 0.05  # remove only worst 5%
+    #
+    # # Model / Dataset related
+    # N_FAKE_USERS = 9
+    # N_ITEMS = 7
+    # BINARY = False  # binary or non binary data
+    # POS_RATIO = 0.1  # Ratio pos/ neg ratio  one percent from each user
+    #
+    # print(AttackAgent(N_FAKE_USERS, N_ITEMS).gnome)
+    # ga = FakeUserGeneticAlgorithm(POP_SIZE, N_GENERATIONS, GENERATIONS_BEFORE_REMOVAL, REMOVE_PERCENTILE, MUTATE_USER_PROB, MUTATE_BIT_PROB, BINARY, POS_RATIO)
+    #
+    # agents = ga.init_agents(N_FAKE_USERS, N_ITEMS)
+    #
+    # print('created n_agents', len(agents))
+    # ga.print_stats(agents, 0)
+    # for cur_generation in range(1, N_GENERATIONS):
+    #     agents = ga.fitness(agents)
+    #     if cur_generation % 50 == 0:
+    #         ga.print_stats(agents , cur_generation)
+    #
+    #     agents = ga.selection(agents)
+    #     agents = ga.crossover(agents, cur_generation)
+    #     agents = ga.mutation(agents)
 
 
 
@@ -212,5 +220,5 @@ def main():
 
 # pop = [agent for agent in ]
 
-if __name__ == '__main__':
-    main()
+# if __name__ == '__main__':
+    # main()

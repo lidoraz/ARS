@@ -1,8 +1,12 @@
 # mode = 0
 import os
-mode = int(os.environ['RUN_MODE'])
+# mode = int(os.environ['RUN_MODE'])
+mode = 4
 path_prefix = ""
 print("Dataset path - Running mode:", mode)
+
+
+
 if mode == 0: # default pc work
     path_prefix = 'E:/DEEP_LEARNING/DATA_SETS/'
 elif mode == 1: # MacBook
@@ -21,4 +25,4 @@ CONFIG = {
 
 }
 
-
+SEED = 42

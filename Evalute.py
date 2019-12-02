@@ -22,18 +22,25 @@ from time import time
 
 from keras.models import clone_model
 
+from Constants import SEED
+np.random.seed(SEED)
+
+
+
 # TODO: MODEL_TAKE_BEST? HOW TO MAKE IT?
 def baseline_train_evalute_model(model, train_set, test_set, batch_size=512, epochs=5):
     best_hr = 0
     best_ndcg = 0
     best_epoch = 0
+    mean_hr = 0
+    mean_ndcg = 0
     models = []
     for epoch in range(epochs):
         t1 = time()
         (user_input, item_input, labels) = train_set
         loss = model.fit([np.array(user_input), np.array(item_input)],  # input
                          np.array(labels),  # labels
-                         batch_size=batch_size, epochs=1, verbose=0, shuffle=True)
+                         batch_size=batch_size, verbose=0, shuffle=True)
         t2 = time()
         mean_hr, mean_ndcg, time_eval = evaluate_model(model, test_set, verbose=0)
         print('Iteration: %d Fit:[%.1f s]: HR = %.4f, NDCG = %.4f, loss = %.4f, Eval:[%.1f s]'
@@ -54,12 +61,15 @@ def pert_train_evaluate_model(model, train_set, test_set, batch_size=512, epochs
     best_hr = 0
     best_ndcg = 0
     best_epoch = 0
+    mean_hr = 0
+    mean_ndcg = 0
     for epoch in range(epochs):
         t1 = time()
+
         (user_input, item_input, labels) = train_set
         loss = model.fit([np.array(user_input), np.array(item_input)],  # input
                          np.array(labels),  # labels
-                         batch_size=batch_size, epochs=1, verbose=0, shuffle=True)
+                         batch_size=batch_size, verbose=0, shuffle=True)
         t2 = time()
         mean_hr, mean_ndcg, time_eval = evaluate_model(model, test_set, verbose=0)
         if verbose > 1:
@@ -77,6 +87,8 @@ def pert_train_evaluate_model(model, train_set, test_set, batch_size=512, epochs
             best_hr = mean_hr
             best_ndcg = mean_ndcg
             best_epoch = epoch
+
+
 
     return best_epoch, best_hr, best_ndcg
 
