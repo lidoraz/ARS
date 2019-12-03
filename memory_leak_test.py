@@ -24,7 +24,7 @@ ml100k = 'movielens100k'
 
 BASE_MODEL_DIR = 'base_models'
 
-from tensorboardX import SummaryWriter
+# from tensorboardX import SummaryWriter
 
 # HYPER-PARAMETERS
 

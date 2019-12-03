@@ -24,7 +24,7 @@ ml100k = 'movielens100k'
 
 BASE_MODEL_DIR = 'base_models'
 
-# from tensorboardX import SummaryWriter
+from tensorboardX import SummaryWriter
 
 # HYPER-PARAMETERS
 
@@ -39,8 +39,8 @@ np.random.seed(SEED)
 MUTATE_USER_PROB = 0.5  # prob for choosing an individual
 MUTATE_BIT_PROB = 0.01  # prob for flipping a bit
 # Selection
-SELECTION_GENERATIONS_BEFORE_REMOVAL = 5
-SELECTION_REMOVE_PERCENTILE = 0.05  # remove only worst 5%
+SELECTION_GENERATIONS_BEFORE_REMOVAL = 10
+SELECTION_REMOVE_PERCENTILE = 0.05  # remove only worst 5% after they have passed SELECTION_GENERATIONS_BEFORE_REMOVAL
 # Crossover
 CROSSOVER_CREATE_TOP = 4  # Select top # to create pairs of offsprings.
 
@@ -227,7 +227,7 @@ def fitness(agents,train_set_subset, attack_params):
         return _fitness_single(agents,train_set_subset, attack_params)
 
  # An example for running the model and evaluating using leave-1-out and top-k using hit ratio and NCDG metrics
-def main(n_fake_users, pop_size = 50, max_pop_size=100,train_frac=TRAINING_SET_AGENT_FRAC, n_generations = 1000):
+def main(n_fake_users, pop_size = 50, max_pop_size=100,train_frac=0.01, n_generations = 1000):
     print('PARAMS:')
     print('Baseline Model Params:')
     print(f'DATASET_NAME:{DATASET_NAME}, TEST_SET_PERCENTAGE:{TEST_SET_PERCENTAGE}, BASE_MODEL_EPOCHS:{BASE_MODEL_EPOCHS}, CONVERT_BINARY:{CONVERT_BINARY}')
@@ -241,7 +241,7 @@ def main(n_fake_users, pop_size = 50, max_pop_size=100,train_frac=TRAINING_SET_A
     print('CONCURRENT=', CONCURRENT)
 
     model, weights_path, train_set, test_set, n_users, n_movies, best_hr, best_ndcg = train_base_model(n_fake_users)
-    baseline_model_weights = model.get_weights()
+    # baseline_model_weights = model.get_weights()
     attack_params = {'n_users': n_users, 'n_movies': n_movies, 'best_base_hr': best_hr, 'best_base_ndcg': best_ndcg,
                      'n_fake_users': n_fake_users, 'test_set':test_set,
                      # 'baseline_model_weights': baseline_model_weights, 'model': model,
@@ -263,16 +263,19 @@ def main(n_fake_users, pop_size = 50, max_pop_size=100,train_frac=TRAINING_SET_A
     agents = ga.init_agents(n_fake_users, n_movies)
     n_new_agents = 0
     print('created n_agents', len(agents))
-    print(f"Training each agent with {TRAINING_SET_AGENT_FRAC:0.0%} of training set ({int(TRAINING_SET_AGENT_FRAC * len(train_set[0]))} real training samples)")
+    print(f"Training each agent with {train_frac:0.0%} of training set ({int(train_frac * len(train_set[0]))} real training samples)")
     t0 = time()
+    ##### Logging
+    tb = SummaryWriter(f'logs',comment=f'exp_u{n_fake_users}_pop{max_pop_size}_t{train_frac}')
     for cur_generation in range(1, n_generations):
         t1 = time()
         train_set_subset = create_subset(train_set, train_frac=train_frac)
         agents = fitness(agents,train_set_subset, attack_params)
         t2 = time() - t1
         t4 = (time() - t0) / 60
-        pool_size, min_fit, max_fit, mean, std = ga.get_stats(agents)
+        pool_size, min_fit, max_fit, mean, std = ga.get_stats(agents, cur_generation, tb)
         max_mem_usage = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / (10 ** 6)  #linux computes in kbytes, while mac in bytes
+
         print(f"G={cur_generation}\tp_size={pool_size}\tcreated={n_new_agents}\tmin={min_fit:.4f}\tmax={max_fit:.4f}\t"
               f"avg={mean:.4f}\tstd={std:.4f}\t"f"fit[{t2:0.2f}s]\t"
               f"all[{t4:0.2f}m]\tmem_usage={max_mem_usage: 0.3} GB")
