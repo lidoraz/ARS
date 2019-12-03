@@ -174,10 +174,11 @@ class FakeUserGeneticAlgorithm:
         # print(f"Best agent index: {np.argmax(fits)}")
 
     @staticmethod
-    def save(agents,n_fake_users, cur_generation, save_dir='agents'):
+    def save(agents, n_fake_users, cur_generation, save_dir='agents'):
         import pickle
         import os
-        pickle.dump(agents, open(os.path.join(save_dir, f'g_{cur_generation}_n_fake{n_fake_users}_agents{len(agents)}_dump.dmp'), 'wb'))
+        with open(os.path.join(save_dir, f'g_{cur_generation}_n_fake{n_fake_users}_agents{len(agents)}_dump.dmp')) as file:
+            pickle.dump(agents, file, 'wb')
 
 # def main():
     # # HYPER-PARAMETERS

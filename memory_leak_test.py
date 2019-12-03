@@ -54,7 +54,7 @@ TEST_SET_PERCENTAGE = 1
 BASE_MODEL_EPOCHS = 3  # will get the best model out of these n epochs.
 
 # Attack hyperparams:
-# PERT_MODEL_TAKE_BEST = False
+PERT_MODEL_TAKE_BEST = False
 MODEL_P_EPOCHS = 3 # 3  # Will take best model (in terms of highest HR and NDCG) if MODEL_TAKE_BEST is set to true
 TRAINING_SET_AGENT_FRAC = 0.5  # FRAC of training set for training the model
 POS_RATIO = 0.02  # Ratio pos/ neg ratio  one percent from each user
@@ -148,7 +148,6 @@ def get_fitness_single(agent, train_set, attack_params):
                                                                               attack_params['test_set'],
                                                                               batch_size=batch_size,
                                                                               epochs=MODEL_P_EPOCHS,
-                                                                              # pert_model_take_best=PERT_MODEL_TAKE_BEST,
                                                                               verbose=VERBOSE)
     t5 = time()
     delta_hr = attack_params['best_base_hr'] - best_pert_hr
@@ -228,6 +227,7 @@ def fitness(agents,train_set_subset, attack_params):
         return _fitness_single(agents,train_set_subset, attack_params)
 
  # An example for running the model and evaluating using leave-1-out and top-k using hit ratio and NCDG metrics
+
 def main(n_fake_users, pop_size = 50, max_pop_size=100,train_frac=TRAINING_SET_AGENT_FRAC):
     POP_SIZE = pop_size
     print('PARAMS:')
@@ -263,30 +263,15 @@ def main(n_fake_users, pop_size = 50, max_pop_size=100,train_frac=TRAINING_SET_A
     agents = ga.init_agents(n_fake_users, n_movies)
     n_new_agents = 0
     print('created n_agents', len(agents))
-    print(f"Training each agent with {TRAINING_SET_AGENT_FRAC:0.0%} of training set ({int(TRAINING_SET_AGENT_FRAC * len(train_set[0]))} real training samples)")
-    t0 = time()
+    # print(f"Training each agent with {TRAINING_SET_AGENT_FRAC:0.0%} of training set ({int(TRAINING_SET_AGENT_FRAC * len(train_set[0]))} real training samples)")
     for cur_generation in range(1, N_GENERATIONS):
-        t1 = time()
+        get_fitness_single(agents[0], train_set, attack_params)
+        # train_setsubset = create_subset(train_set, train_frac=train_frac) # TODO:  not this
+        # agents = fitness(agents,train_set, attack_params)
+        # pool_size, min_fit, max_fit, mean, std = ga.get_stats(agents)
+        max_mem_usage = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / (10 ** 3)  #linux computes in kbytes, while mac in bytes
+        print(f"G={cur_generation}\tmem_usage={max_mem_usage:0.0f} MB")
 
-        # train_set_subset = create_subset(train_set, train_frac=train_frac) # TODO:  not this
-        agents = fitness(agents,train_set, attack_params)
-        t2 = time() - t1
-        t4 = (time() - t0) / 60
-        pool_size, min_fit, max_fit, mean, std = ga.get_stats(agents)
-        max_mem_usage = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / (10 ** 6)  #linux computes in kbytes, while mac in bytes
-        print(f"G={cur_generation}\tp_size={pool_size}\tcreated={n_new_agents}\tmin={min_fit:.4f}\tmax={max_fit:.4f}\t"
-              f"avg={mean:.4f}\tstd={std:.4f}\t"f"fit[{t2:0.2f}s]\t"
-              f"all[{t4:0.2f}m]\tmem_usage={max_mem_usage: 0.3} GB")
-
-        if cur_generation % 100 == 0:
-            ga.save(agents, n_fake_users, cur_generation)
-
-        # #TODO: not these:
-        # agents = ga.selection(agents)
-        # agents, n_new_agents = ga.crossover(agents, cur_generation)
-        # agents = ga.mutation(agents)
-    ga.save(agents,n_fake_users, N_GENERATIONS)
-        # print(f'G:{cur_generation}\tfitness_:[{t1:0.2f}s]\toverall_time:[{t2:0.2f}s]\telapsed:[{((time() - t0_s) / 60):0.2f}m]')
 import fire
 
 if __name__ == '__main__':

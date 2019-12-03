@@ -147,7 +147,7 @@ class Data():
         df_reindexed['movie_id'] = df_reindexed['movie_id'].apply(lambda x: self._itemid2idx[x])
         self.n_users = df_reindexed['user_id'].max() + 1
         self.n_movies = df_reindexed['movie_id'].max() + 1
-        print('n_users:', self.n_users, 'n_movies:', self.n_movies)
+        print('n_real_users:', self.n_users, 'n_movies:', self.n_movies)
 
         self.user_item_matrix_reindexed = pd.pivot_table(data=df_reindexed, values='rating', index='user_id', columns='movie_id').fillna(0)
         df_reindexed_removed_recents, most_recent_entries = self._filter_trainset(df_reindexed)

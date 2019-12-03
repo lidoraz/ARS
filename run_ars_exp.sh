@@ -5,7 +5,7 @@
 #python -u ga_attack.py --n_fake_users=16 --pop_size=100 --max_pop_size=120 --train_frac=0.5 > n_users_16.txt &
 python -u ga_attack.py --n_fake_users=32 --pop_size=100 --max_pop_size=120 --train_frac=0.5 > n_users_32.txt &
 #python -u ga_attack.py --n_fake_users=64 --pop_size=100 --max_pop_size=120 --train_frac=0.5 > n_users_64.txt &
-#python -u ga_attack.py --n_fake_users=128 --pop_size=100 --max_pop_size=120 --train_frac=0.5 > n_users_128.txt  &
+python -u ga_attack.py --n_fake_users=128 --pop_size=100 --max_pop_size=120 --train_frac=0.5 > n_users_128.txt  &
 # python -u ga_attack.py --n_fake_users=10 --pop_size=100 --max_pop_size=120 --train_frac=0.5 &;
 
 

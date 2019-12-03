@@ -1,4 +1,4 @@
-name: ars
+name: ars_dell
 channels:
   - defaults
 dependencies:
