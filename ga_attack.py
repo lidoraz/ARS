@@ -14,6 +14,7 @@ from ga import FakeUserGeneticAlgorithm
 from Evalute import baseline_train_evalute_model, pert_train_evaluate_model, plot
 from Data import *
 
+import gc
 import tensorflow as tf
 from keras.models import model_from_json
 
@@ -24,7 +25,7 @@ ml100k = 'movielens100k'
 
 BASE_MODEL_DIR = 'base_models'
 
-from tensorboardX import SummaryWriter
+# from tensorboardX import SummaryWriter
 
 # HYPER-PARAMETERS
 
@@ -33,7 +34,7 @@ np.random.seed(SEED)
 
 #GA Hyperparams:
 # POP_SIZE = 100
-# MAX_POP_SIZE = 100  # 0 - no limit
+# MAX_POP_SIZE = 300  # 0 - no limit
 N_GENERATIONS = 1000
 # Mutation
 MUTATE_USER_PROB = 0.5  # prob for choosing an individual
@@ -51,10 +52,8 @@ CROSSOVER_CREATE_TOP = 4  # Select top # to create pairs of offsprings.
 CONVERT_BINARY = True
 DATASET_NAME = ml100k
 TEST_SET_PERCENTAGE = 1
-BASE_MODEL_EPOCHS = 3  # will get the best model out of these n epochs.
+BASE_MODEL_EPOCHS = 1  # will get the best model out of these n epochs.
 
-# Attack hyperparams:
-# PERT_MODEL_TAKE_BEST = False
 MODEL_P_EPOCHS = 3 # 3  # Will take best model (in terms of highest HR and NDCG) if MODEL_TAKE_BEST is set to true
 TRAINING_SET_AGENT_FRAC = 0.5  # FRAC of training set for training the model
 POS_RATIO = 0.02  # Ratio pos/ neg ratio  one percent from each user
@@ -163,7 +162,7 @@ def get_fitness_single(agent, train_set, attack_params):
         beign_malicious_ratio = len(train_set[0]) / len(malicious_training_set[0])
         print(f'id:{agent.id}\tratio:{beign_malicious_ratio:0.2f}\tage:{agent.age}\tΔhr:{delta_hr:0.4f}\tΔndcg:{delta_ndcg:0.4f}\tf:{agent_fitness:0.4f}\ttotal_time={t5-t0:0.1f}s')
     # del model_copy
-    # tf.reset_default_graph() # TODO: not this
+    # tf.reset_default_graph() # TODO: THIS FIXES THE PROBLEM
     return agent_fitness
     # return sum(sum(agent.gnome))
 
@@ -215,7 +214,7 @@ def _fitness_single(agents,train_set, attack_params):
     for agent in agents:
         if not agent.evaluted:
             agent_fitness = get_fitness_single(agent, train_set, attack_params)
-            # tf.reset_default_graph()  # TODO: THIS FIXES THE PROBLEM
+            tf.reset_default_graph()  # TODO: THIS FIXES THE PROBLEM
             agent.fitness = agent_fitness
     return agents
 
@@ -239,7 +238,7 @@ def main(n_fake_users, pop_size = 50, max_pop_size=100,train_frac=TRAINING_SET_A
     print(f'SELECTION_GENERATIONS_BEFORE_REMOVAL:{SELECTION_GENERATIONS_BEFORE_REMOVAL}, SELECTION_REMOVE_PERCENTILE:{SELECTION_REMOVE_PERCENTILE} ')
     print('***ATTACK PARAMS:')
     print(f'n_fake_users:{n_fake_users}, TRAINING_SET_AGENT_FRAC:{TRAINING_SET_AGENT_FRAC},'
-          f'POS_RATIO:{POS_RATIO}, MODEL_P_EPOCHS:{MODEL_P_EPOCHS}, PERT_MODEL_TAKE_BEST:{PERT_MODEL_TAKE_BEST}')
+          f'POS_RATIO:{POS_RATIO}, MODEL_P_EPOCHS:{MODEL_P_EPOCHS}')
     print('CONCURRENT=', CONCURRENT)
 
     model, weights_path, train_set, test_set, n_users, n_movies, best_hr, best_ndcg = train_base_model(n_fake_users)
