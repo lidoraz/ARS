@@ -266,6 +266,8 @@ def main(n_fake_users, pop_size = 50, max_pop_size=100,train_frac=0.01, n_genera
     print(f"Training each agent with {train_frac:0.0%} of training set ({int(train_frac * len(train_set[0]))} real training samples)")
     t0 = time()
     ##### Logging
+    # TODO: Look on this: CREATING STATIONARY TRAINING SUBSET - attack may overfit to this particular training')
+    # train_set_subset = create_subset(train_set, train_frac=train_frac)
     tb = SummaryWriter(f'logs',comment=f'exp_u{n_fake_users}_pop{max_pop_size}_t{train_frac}')
     for cur_generation in range(1, n_generations):
         t1 = time()

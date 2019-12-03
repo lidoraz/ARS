@@ -171,11 +171,11 @@ class FakeUserGeneticAlgorithm:
         std = abs(sum2 / length - mean ** 2) ** 0.5
         max_fit = max(fits)
         min_fit = min(fits)
-        tb.add_scaler('max_fit', max_fit, cur_generation)
-        tb.add_scaler('min_fit', min_fit, cur_generation)
-        tb.add_scaler('mean_fit', mean, cur_generation)
-        tb.add_scaler('std_fit', std, cur_generation)
-        tb.add_scaler('pool_size', length, cur_generation)
+        tb.add_scalar('max_fit', max_fit, cur_generation)
+        tb.add_scalar('min_fit', min_fit, cur_generation)
+        tb.add_scalar('mean_fit', mean, cur_generation)
+        tb.add_scalar('std_fit', std, cur_generation)
+        tb.add_scalar('pool_size', length, cur_generation)
         tb.close()
         return length, min_fit, max_fit, mean, std
         # print(f"G:{cur_generation}\tp_size:{length}\tmin:{min(fits):.2f}\tmax:{max(fits):.2f}\tavg:{mean:.2f}\tstd:{std:.2f}")

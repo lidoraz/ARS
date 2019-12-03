@@ -114,17 +114,17 @@ def pert_train_evaluate_model(model, train_set, test_set, batch_size=512, epochs
     return best_epoch, best_hr, best_ndcg
 
 #import matplotlib.pyplot as plt
-def plot(HR_list, NDCG_list):
-    epochs = list(range(len(HR_list)))
-    plt.figure(figsize=(10, 10))
-    plt.plot(epochs, HR_list)
-    plt.xlabel('Epoch')
-    plt.ylabel('Hit Rate')
-    plt.title(f'Adv Attack: Metrics drop over {(len(HR_list))} epochs')
-    ax2 = plt.twinx()
-    ax2.set_ylabel('NDCG', color='tab:orange')
-    ax2.plot(epochs, NDCG_list, color='orange')
-    plt.show()
+# def plot(HR_list, NDCG_list):
+#     epochs = list(range(len(HR_list)))
+#     plt.figure(figsize=(10, 10))
+#     plt.plot(epochs, HR_list)
+#     plt.xlabel('Epoch')
+#     plt.ylabel('Hit Rate')
+#     plt.title(f'Adv Attack: Metrics drop over {(len(HR_list))} epochs')
+#     ax2 = plt.twinx()
+#     ax2.set_ylabel('NDCG', color='tab:orange')
+#     ax2.plot(epochs, NDCG_list, color='orange')
+#     plt.show()
 
 
 def evaluate_model(model, test_set, k= 10, verbose=1):
