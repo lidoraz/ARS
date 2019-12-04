@@ -56,8 +56,8 @@ class FakeUserGeneticAlgorithm:
 
 
 
-    def init_agents(self, n_m_users, n_items):
-        return [AttackAgent(n_m_users, n_items, POS_RATIO=self.POS_RATIO, BINARY=self.CONVERT_BINARY) for _ in range(self.POP_SIZE)]
+    def init_agents(self, n_fake_users, n_items):
+        return [AttackAgent(n_fake_users, n_items, POS_RATIO=self.POS_RATIO, BINARY=self.CONVERT_BINARY) for _ in range(self.POP_SIZE)]
 
 
     def fitness(self, agents):
@@ -161,7 +161,7 @@ class FakeUserGeneticAlgorithm:
         return agents
 
     @staticmethod
-    def get_stats(agents, cur_generation, tb):
+    def get_stats_writer(agents, cur_generation, tb):
         # Gather all the fitnesses in one list and print the stats
         fits = [ind.fitness for ind in agents]
 
@@ -181,6 +181,19 @@ class FakeUserGeneticAlgorithm:
         # print(f"G:{cur_generation}\tp_size:{length}\tmin:{min(fits):.2f}\tmax:{max(fits):.2f}\tavg:{mean:.2f}\tstd:{std:.2f}")
         # print(f"Best agent index: {np.argmax(fits)}")
 
+    def print_stats(self, agents, n_created, cur_generation):
+        # Gather all the fitnesses in one list and print the stats
+        fits = [ind.fitness for ind in agents]
+
+        length = len(agents)
+        mean = sum(fits) / length
+        sum2 = sum(x * x for x in fits)
+        std = abs(sum2 / length - mean ** 2) ** 0.5
+        max_fit = max(fits)
+        min_fit = min(fits)
+        print(f'G={cur_generation}, P_SIZE={length}, n_created={n_created}, min_fit={min_fit:0.3f}, max_fit={max_fit:0.3f}, mean={mean:0.3f}, std={std:0.3f}')
+        return length, min_fit, max_fit, mean, std
+        # return length, min_fit, max_fit, mean, std
     @staticmethod
     def save(agents, n_fake_users, cur_generation, save_dir='agents'):
         import pickle
@@ -188,38 +201,56 @@ class FakeUserGeneticAlgorithm:
         with open(os.path.join(save_dir, f'g_{cur_generation}_n_fake{n_fake_users}_agents{len(agents)}_dump.dmp')) as file:
             pickle.dump(agents, file, 'wb')
 
-# def main():
-    # # HYPER-PARAMETERS
-    # POP_SIZE = 100
-    # N_GENERATIONS = 1000
-    # # Mutation
-    # MUTATE_USER_PROB = 0.2  # prob for choosing an individual
-    # MUTATE_BIT_PROB = 0.01  # prob for flipping a bit
-    # # Selection
-    # GENERATIONS_BEFORE_REMOVAL = 50
-    # REMOVE_PERCENTILE = 0.05  # remove only worst 5%
-    #
-    # # Model / Dataset related
-    # N_FAKE_USERS = 9
-    # N_ITEMS = 7
+
+
+def main():
+    from tensorboardX import SummaryWriter
+
+    # HYPER-PARAMETERS
+    POP_SIZE = 100
+    MAX_POP_SIZE = 300
+    N_GENERATIONS = 1000
+    # Mutation
+    MUTATE_USER_PROB = 0.2  # prob for choosing an individual
+    MUTATE_BIT_PROB = 0.01  # prob for flipping a bit
+    # Selection
+    SELECTION_GENERATIONS_BEFORE_REMOVAL = 20
+    SELECTION_REMOVE_PERCENTILE = 0.05  # remove only worst 5%
+    # Crossover
+    CROSSOVER_CREATE_TOP = 5
+
+    #Model / Dataset related
+    N_FAKE_USERS = 10
+    N_ITEMS = 2000
     # BINARY = False  # binary or non binary data
-    # POS_RATIO = 0.1  # Ratio pos/ neg ratio  one percent from each user
-    #
+    POS_RATIO = 0.5 # Ratio pos/ neg ratio  one percent from each user
+
     # print(AttackAgent(N_FAKE_USERS, N_ITEMS).gnome)
-    # ga = FakeUserGeneticAlgorithm(POP_SIZE, N_GENERATIONS, GENERATIONS_BEFORE_REMOVAL, REMOVE_PERCENTILE, MUTATE_USER_PROB, MUTATE_BIT_PROB, BINARY, POS_RATIO)
-    #
-    # agents = ga.init_agents(N_FAKE_USERS, N_ITEMS)
-    #
-    # print('created n_agents', len(agents))
-    # ga.print_stats(agents, 0)
-    # for cur_generation in range(1, N_GENERATIONS):
-    #     agents = ga.fitness(agents)
-    #     if cur_generation % 50 == 0:
-    #         ga.print_stats(agents , cur_generation)
-    #
-    #     agents = ga.selection(agents)
-    #     agents = ga.crossover(agents, cur_generation)
-    #     agents = ga.mutation(agents)
+    N_GENERATIONS = 1000
+    ga = FakeUserGeneticAlgorithm(POP_SIZE=POP_SIZE,
+                                  MAX_POP_SIZE=MAX_POP_SIZE,
+                                  N_GENERATIONS=N_GENERATIONS,
+                                  SELECTION_GENERATIONS_BEFORE_REMOVAL=SELECTION_GENERATIONS_BEFORE_REMOVAL,
+                                  SELECTION_REMOVE_PERCENTILE=SELECTION_REMOVE_PERCENTILE,
+                                  MUTATE_USER_PROB=MUTATE_USER_PROB,
+                                  MUTATE_BIT_PROB=MUTATE_BIT_PROB,
+                                  CONVERT_BINARY=True,
+                                  POS_RATIO=POS_RATIO,
+                                  CROSSOVER_CREATE_TOP=CROSSOVER_CREATE_TOP)
+
+    agents = ga.init_agents(n_fake_users=N_FAKE_USERS, n_items= N_ITEMS)
+    # tb = SummaryWriter(comment = f'test_{POS_RATIO}_{SELECTION_GENERATIONS_BEFORE_REMOVAL}_{SELECTION_REMOVE_PERCENTILE}_{MUTATE_USER_PROB}_{MUTATE_BIT_PROB}_{CROSSOVER_CREATE_TOP}')
+    print('created n_agents', len(agents))
+    n_created = 0
+    for cur_generation in range(1, N_GENERATIONS):
+        agents = ga.fitness(agents)
+        # if cur_generation % 3 == 0:
+        # ga.get_stats_writer(agents, cur_generation, tb)
+        ga.print_stats(agents, n_created, cur_generation)
+
+        agents = ga.selection(agents)
+        agents, n_created = ga.crossover(agents, cur_generation)
+        agents = ga.mutation(agents)
 
 
 
@@ -229,5 +260,5 @@ class FakeUserGeneticAlgorithm:
 
 # pop = [agent for agent in ]
 
-# if __name__ == '__main__':
-    # main()
+if __name__ == '__main__':
+    main()

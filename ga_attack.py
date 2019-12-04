@@ -228,25 +228,27 @@ def fitness(agents,train_set_subset, attack_params):
 
  # An example for running the model and evaluating using leave-1-out and top-k using hit ratio and NCDG metrics
 def main(n_fake_users, pop_size = 50, max_pop_size=100,train_frac=0.01, n_generations = 1000):
-    print('PARAMS:')
-    print('Baseline Model Params:')
-    print(f'DATASET_NAME:{DATASET_NAME}, TEST_SET_PERCENTAGE:{TEST_SET_PERCENTAGE}, BASE_MODEL_EPOCHS:{BASE_MODEL_EPOCHS}, CONVERT_BINARY:{CONVERT_BINARY}')
-    print(f'GA Hyperparams:')
-    print(f'POP_SIZE:{pop_size}, N_GENERATIONS:{n_generations}, CROSSOVER_TOP: {CROSSOVER_CREATE_TOP}')
-    print(f'MUTATE_USER_PROB:{MUTATE_USER_PROB}, MUTATE_BIT_PROB:{MUTATE_BIT_PROB}')
-    print(f'SELECTION_GENERATIONS_BEFORE_REMOVAL:{SELECTION_GENERATIONS_BEFORE_REMOVAL}, SELECTION_REMOVE_PERCENTILE:{SELECTION_REMOVE_PERCENTILE} ')
-    print('***ATTACK PARAMS:')
-    print(f'n_fake_users:{n_fake_users}, TRAINING_SET_AGENT_FRAC:{TRAINING_SET_AGENT_FRAC},'
-          f'POS_RATIO:{POS_RATIO}, MODEL_P_EPOCHS:{MODEL_P_EPOCHS}')
+    print('PARAMS')
+    print('*Baseline Model Params*')
+    print(f'DATASET_NAME={DATASET_NAME}, max_pop_size={max_pop_size} TEST_SET_PERCENTAGE={TEST_SET_PERCENTAGE},'
+          f' BASE_MODEL_EPOCHS={BASE_MODEL_EPOCHS}, CONVERT_BINARY={CONVERT_BINARY}')
+    print(f'**GA Hyperparams**')
+    print(f'POP_SIZE={pop_size}, N_GENERATIONS={n_generations}, CROSSOVER_TOP= {CROSSOVER_CREATE_TOP}')
+    print(f'MUTATE_USER_PROB={MUTATE_USER_PROB}, MUTATE_BIT_PROB={MUTATE_BIT_PROB}')
+    print(f'SELECTION_GENERATIONS_BEFORE_REMOVAL={SELECTION_GENERATIONS_BEFORE_REMOVAL}, SELECTION_REMOVE_PERCENTILE={SELECTION_REMOVE_PERCENTILE} ')
+    print('***ATTACK PARAMS***')
+    print(f'n_fake_users={n_fake_users}, TRAINING_SET_AGENT_FRAC={TRAINING_SET_AGENT_FRAC}')
+    print(f'POS_RATIO={POS_RATIO}, MODEL_P_EPOCHS={MODEL_P_EPOCHS}')
     print('CONCURRENT=', CONCURRENT)
 
     model, weights_path, train_set, test_set, n_users, n_movies, best_hr, best_ndcg = train_base_model(n_fake_users)
     # baseline_model_weights = model.get_weights()
     attack_params = {'n_users': n_users, 'n_movies': n_movies, 'best_base_hr': best_hr, 'best_base_ndcg': best_ndcg,
-                     'n_fake_users': n_fake_users, 'test_set':test_set,
+                     'n_fake_users': n_fake_users, 'test_set': test_set,
                      # 'baseline_model_weights': baseline_model_weights, 'model': model,
                      }
-    print(f'Trained Base model:: n_real_users:{n_users}\tn_movies:{n_movies}\tbest_hr:{best_hr:0.4f}\tbest_ndcg:{best_ndcg:0.4f}')
+    print(f'Trained Base model: n_real_users={n_users}\tn_movies={n_movies}\t'
+          f'Baseline Metricsb: best_hr={best_hr:0.4f}\tbest_ndcg={best_ndcg:0.4f}')
     print("ADVERSRIAL PHASE")
 
     ga = FakeUserGeneticAlgorithm(POP_SIZE=pop_size,
@@ -261,33 +263,32 @@ def main(n_fake_users, pop_size = 50, max_pop_size=100,train_frac=0.01, n_genera
                                   CROSSOVER_CREATE_TOP=CROSSOVER_CREATE_TOP)
 
     agents = ga.init_agents(n_fake_users, n_movies)
-    n_new_agents = 0
-    print('created n_agents', len(agents))
+    print('created n_agents=', len(agents))
     print(f"Training each agent with {train_frac:0.0%} of training set ({int(train_frac * len(train_set[0]))} real training samples)")
     t0 = time()
     ##### Logging
     # TODO: Look on this: CREATING STATIONARY TRAINING SUBSET - attack may overfit to this particular training')
     # train_set_subset = create_subset(train_set, train_frac=train_frac)
-    tb = SummaryWriter(f'logs',comment=f'exp_u{n_fake_users}_pop{max_pop_size}_t{train_frac}')
+    tb = SummaryWriter(comment=f'exp_u{n_fake_users}_pop{max_pop_size}_t{train_frac}')
     for cur_generation in range(1, n_generations):
         t1 = time()
         train_set_subset = create_subset(train_set, train_frac=train_frac)
         agents = fitness(agents,train_set_subset, attack_params)
         t2 = time() - t1
         t4 = (time() - t0) / 60
-        pool_size, min_fit, max_fit, mean, std = ga.get_stats(agents, cur_generation, tb)
+        pool_size, min_fit, max_fit, mean, std = ga.get_stats_writer(agents, cur_generation, tb)
         max_mem_usage = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / (10 ** 6)  #linux computes in kbytes, while mac in bytes
 
-        print(f"G={cur_generation}\tp_size={pool_size}\tcreated={n_new_agents}\tmin={min_fit:.4f}\tmax={max_fit:.4f}\t"
+        print(f"G={cur_generation}\tp_size={pool_size}\tcreated={CROSSOVER_CREATE_TOP* (CROSSOVER_CREATE_TOP-1)}\tmin={min_fit:.4f}\tmax={max_fit:.4f}\t"
               f"avg={mean:.4f}\tstd={std:.4f}\t"f"fit[{t2:0.2f}s]\t"
               f"all[{t4:0.2f}m]\tmem_usage={max_mem_usage: 0.3} GB")
 
         if cur_generation % 100 == 0:
             ga.save(agents, n_fake_users, cur_generation)
 
-        agents = ga.selection(agents)
-        agents, n_new_agents = ga.crossover(agents, cur_generation)
-        agents = ga.mutation(agents)
+        # agents = ga.selection(agents)
+        # agents, n_new_agents = ga.crossover(agents, cur_generation)
+        # agents = ga.mutation(agents)
     ga.save(agents,n_fake_users, n_generations)
         # print(f'G:{cur_generation}\tfitness_:[{t1:0.2f}s]\toverall_time:[{t2:0.2f}s]\telapsed:[{((time() - t0_s) / 60):0.2f}m]')
 import fire
