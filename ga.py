@@ -195,10 +195,10 @@ class FakeUserGeneticAlgorithm:
         return length, min_fit, max_fit, mean, std
         # return length, min_fit, max_fit, mean, std
     @staticmethod
-    def save(agents, n_fake_users, cur_generation, save_dir='agents'):
+    def save(agents, n_fake_users, cur_generation, train_frac, save_dir='agents'):
         import pickle
         import os
-        with open(os.path.join(save_dir, f'g_{cur_generation}_n_fake{n_fake_users}_agents{len(agents)}_dump.dmp')) as file:
+        with open(os.path.join(save_dir, f'g_{cur_generation}_n_fake{n_fake_users}_t_{train_frac}_agents{len(agents)}_dump.dmp')) as file:
             pickle.dump(agents, file, 'wb')
 
 

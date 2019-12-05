@@ -119,13 +119,14 @@ def train_base_model(n_fake_users):
 from keras.models import load_model
 
 
-def load_base_model(n_fake_users):
+def load_base_model(n_fake_users, name="default_model"):
     model_path = f'{BASE_MODEL_DIR}/NeuMF_u{n_fake_users}_e{BASE_MODEL_EPOCHS}.json'
     weights_path = f'{BASE_MODEL_DIR}/NeuMF_u{n_fake_users}_e{BASE_MODEL_EPOCHS}_w.h5'
 
     with open(model_path, 'r') as json_file:
         loaded_model_json = json_file.read()
     model = model_from_json(loaded_model_json)
+    model.name = name
     model.load_weights(weights_path)
     model.compile(optimizer=Adam(lr=0.001), loss='binary_crossentropy')
     return model
@@ -139,7 +140,7 @@ def get_fitness_single(agent, train_set, attack_params):
     t0 = time()
     batch_size = 512
     model = attack_params['model']
-    # model.set_weights(attack_params['baseline_model_weights']) # must reset weights to baseline each time an agent gets evaluated #TODO: not this
+    model.set_weights(attack_params['baseline_model_weights']) # must reset weights to baseline each time an agent gets evaluated #TODO: not this
     attack_df = convert_attack_agent_to_input_df(agent)
     malicious_training_set = create_training_instances_malicious(df=attack_df, user_item_matrix=agent.gnome,
                                                                  n_users=attack_params['n_users'], num_negatives=4)
@@ -167,46 +168,46 @@ def get_fitness_single(agent, train_set, attack_params):
     # return sum(sum(agent.gnome))
 
 
-# def _fitness_concurrent(agents, train_set, attack_params):
-#     """
-#     Runs concurrent...
-#     :param agents:
-#     :param n_users:
-#     :param train_set:
-#     :param test_set:
-#     :param best_base_hr:
-#     :param best_base_ndcg:
-#     :return:
-#     """
-#     from concurrent.futures.thread import ThreadPoolExecutor
-#     import tensorflow as tf
-#     executor = ThreadPoolExecutor(max_workers=CONCURRENT)
-#
-#     def eval_fitness_func(agent):
-#         raise EnvironmentError('this causes oom problems')
-#         if not agent.evaluted:
-#             # workaround for tensorflow, each task creates a new graph
-#             # with tf.Graph() as graph:
-#             # tf.Graph().
-#             with tf.Graph().as_default() as graph:
-#                 with tf.Session(graph=graph) as sess:
-#                     K.set_session(sess)
-#                     agent_fitness = __get_fitness(agent, train_set, attack_params)
-#             # gc.collect()
-#                             # K.clear_session() # TODO: could be problemmatirc
-#                             # tf.compat.v1.reset_default_graph()
-#             # tf.reset_default_graph()  # TODO: THIS FIXES THE PROBLEM
-#             # graph.close()
-#             return agent_fitness
-#
-#         else:
-#             return agent.fitness
-#
-#     fitness_list = list(executor.map(eval_fitness_func, agents))
-#     for idx, agent in enumerate(agents):
-#         agent.fitness = fitness_list[idx]
-#         agent.evluated = True
-#     return agents
+def _fitness_concurrent(agents, train_set, attack_params):
+    """
+    Runs concurrent...
+    :param agents:
+    :param n_users:
+    :param train_set:
+    :param test_set:
+    :param best_base_hr:
+    :param best_base_ndcg:
+    :return:
+    """
+    from concurrent.futures.thread import ThreadPoolExecutor
+    import tensorflow as tf
+    executor = ThreadPoolExecutor(max_workers=CONCURRENT)
+
+    def eval_fitness_func(agent):
+        # raise EnvironmentError('this causes oom problems')
+        if not agent.evaluted:
+            # workaround for tensorflow, each task creates a new graph
+            # with tf.Graph() as graph:
+            # tf.Graph().
+            with tf.Graph().as_default() as graph:
+                with tf.Session(graph=graph) as sess:
+                    K.set_session(sess)
+                    agent_fitness = __get_fitness(agent, train_set, attack_params)
+            # gc.collect()
+                            # K.clear_session() # TODO: could be problemmatirc
+                            # tf.compat.v1.reset_default_graph()
+            # tf.reset_default_graph()  # TODO: THIS FIXES THE PROBLEM
+            # graph.close()
+            return agent_fitness
+
+        else:
+            return agent.fitness
+
+    fitness_list = list(executor.map(eval_fitness_func, agents))
+    for idx, agent in enumerate(agents):
+        agent.fitness = fitness_list[idx]
+        agent.evluated = True
+    return agents
 
 
 def _fitness_single(agents,train_set, attack_params):
