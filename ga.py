@@ -72,12 +72,11 @@ class FakeUserGeneticAlgorithm:
         # return it as fitness
         return agents
 
-    """
-    Sorts the pool, removes old indviduals that are over GENERATIONS_BEFORE_REMOVAL and are worse than REMOVE_PERCENTILE in score
-    """
 
-    # TODO: there is a case where the pool can get too large, think about it.
     def selection(self, agents):
+        """
+            Sorts the pool, removes old indviduals that are over GENERATIONS_BEFORE_REMOVAL and are worse than REMOVE_PERCENTILE in score
+            """
         # update age
         for agent in agents:
             agent.age += 1
@@ -85,7 +84,9 @@ class FakeUserGeneticAlgorithm:
         agents = sorted(agents, key=lambda x: x.fitness, reverse=True)
         # get 5% worst
         fitness_treshold = agents[int((1-self.SELECTION_REMOVE_PERCENTILE) * len(agents))].fitness
-        remove_func = lambda x: x.age < self.SELECTION_GENERATIONS_BEFORE_REMOVAL or x.fitness < fitness_treshold
+        # remove agents that are over age and their fitness is low
+        #TODO: check this, not should be easier to understand
+        remove_func = lambda x: not(x.age > self.SELECTION_GENERATIONS_BEFORE_REMOVAL or x.fitness < fitness_treshold)
         agents_removed_worst = list(filter(remove_func, agents))
         return agents_removed_worst
 

@@ -231,10 +231,15 @@ def fitness(agents,train_set_subset, attack_params):
         return _fitness_single(agents,train_set_subset, attack_params)
 
  # An example for running the model and evaluating using leave-1-out and top-k using hit ratio and NCDG metrics
-def main(n_fake_users, pop_size = 500, max_pop_size=100,train_frac=0.01, n_generations = 1000):
+def main(n_fake_users, pop_size = 500, max_pop_size=100,train_frac=0.01, n_generations = 1000, load=False):
+    if load:
+        logger.
     logger = logging.getLogger('ga_attack')
     logger.setLevel(logging.DEBUG)
-    fh = logging.FileHandler(f'logs/exp_u{n_fake_users}_pop{max_pop_size}_t{train_frac}.log')
+    if load:
+        fh = logging.FileHandler(f'logs/exp_cont_u{n_fake_users}_pop{max_pop_size}_t{train_frac}.log')
+    else:
+        fh = logging.FileHandler(f'logs/exp_u{n_fake_users}_pop{max_pop_size}_t{train_frac}.log')
     fh.setFormatter(logging.Formatter('%(asctime)s - %(message)s'))
     logger.addHandler(fh)
     logger.info('PARAMS')
@@ -297,7 +302,7 @@ def main(n_fake_users, pop_size = 500, max_pop_size=100,train_frac=0.01, n_gener
         agents = ga.selection(agents)
         agents, n_new_agents = ga.crossover(agents, cur_generation)
         agents = ga.mutation(agents)
-    ga.save(agents, n_fake_users, train_frac, n_generations)
+    ga.save(agents,n_fake_users, n_generations)
         # print(f'G:{cur_generation}\tfitness_:[{t1:0.2f}s]\toverall_time:[{t2:0.2f}s]\telapsed:[{((time() - t0_s) / 60):0.2f}m]')
 import fire
 
