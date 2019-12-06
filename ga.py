@@ -199,8 +199,8 @@ class FakeUserGeneticAlgorithm:
     def save(agents, n_fake_users, cur_generation, train_frac, save_dir='agents'):
         import pickle
         import os
-        with open(os.path.join(save_dir, f'g_{cur_generation}_n_fake{n_fake_users}_t_{train_frac}_agents{len(agents)}_dump.dmp')) as file:
-            pickle.dump(agents, file, 'wb')
+        with open(os.path.join(save_dir, f'agents_dump_n_fake{n_fake_users}_t_{train_frac}_n_agents{len(agents)}.dmp'), 'wb') as file:
+            pickle.dump(agents, file)
 
 
 
