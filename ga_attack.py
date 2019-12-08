@@ -117,10 +117,6 @@ def train_base_model(n_fake_users):
             best_ndcg = metrics['best_ndcg']
     return model, weights_path, train_set, test_set, n_users, n_movies, best_hr, best_ndcg
 
-
-from keras.models import load_model
-
-
 def load_base_model(n_fake_users):
     model_path = f'{BASE_MODEL_DIR}/NeuMF_u{n_fake_users}_e{BASE_MODEL_EPOCHS}.json'
     weights_path = f'{BASE_MODEL_DIR}/NeuMF_u{n_fake_users}_e{BASE_MODEL_EPOCHS}_w.h5'
@@ -259,7 +255,7 @@ def main(n_fake_users, pop_size = 500, max_pop_size=100,train_frac=0.01, n_gener
                      'baseline_model_weights': baseline_model_weights, 'model': model,
                      }
     logger.info(f'Trained Base model: n_real_users={n_users}\tn_movies={n_movies}\t'
-          f'Baseline Metricsb: best_hr={best_hr:0.4f}\tbest_ndcg={best_ndcg:0.4f}')
+          f'Baseline Metrics: best_hr={best_hr:0.4f}\tbest_ndcg={best_ndcg:0.4f}')
     logger.info("ADVERSRIAL PHASE")
 
 
@@ -293,7 +289,8 @@ def main(n_fake_users, pop_size = 500, max_pop_size=100,train_frac=0.01, n_gener
               f"avg={mean:.4f}\tstd={std:.4f}\t"f"fit[{t2:0.2f}s]\t"
               f"all[{t4:0.2f}m]\tmem_usage={max_mem_usage: 0.3} GB")
 
-        ga.save(agents, n_fake_users, train_frac, cur_generation)
+        ga.save(agents, n_fake_users, train_frac)
+        print('saved to file...', cur_generation)
         agents = ga.selection(agents)
         agents, n_new_agents = ga.crossover(agents, cur_generation)
         agents = ga.mutation(agents)
