@@ -37,13 +37,19 @@ class AttackAgent:
         else:
             self.gnome = gnome
 
+
+
 class FakeUserGeneticAlgorithm:
     def __init__(self, POP_SIZE,MAX_POP_SIZE, N_GENERATIONS, SELECTION_GENERATIONS_BEFORE_REMOVAL,
-                 SELECTION_REMOVE_PERCENTILE, MUTATE_USER_PROB, MUTATE_BIT_PROB, CONVERT_BINARY, POS_RATIO,CROSSOVER_CREATE_TOP):
+                 SELECTION_REMOVE_PERCENTILE, MUTATE_USER_PROB, MUTATE_BIT_PROB, CONVERT_BINARY, POS_RATIO,CROSSOVER_CREATE_TOP, SELECTION_MODE='TOURNAMENT'):
 
         self.POP_SIZE = POP_SIZE
         self.MAX_POP_SIZE = MAX_POP_SIZE
         self.N_GENERATIONS = N_GENERATIONS
+
+        self.SELECTION_MODE = SELECTION_MODE
+        print('SELECTION_MODE:', SELECTION_MODE)
+
         self.SELECTION_GENERATIONS_BEFORE_REMOVAL = SELECTION_GENERATIONS_BEFORE_REMOVAL
         self.SELECTION_REMOVE_PERCENTILE = SELECTION_REMOVE_PERCENTILE
         self.MUTATE_USER_PROB = MUTATE_USER_PROB
@@ -52,13 +58,14 @@ class FakeUserGeneticAlgorithm:
         self.POS_RATIO = POS_RATIO
         self.CROSSOVER_CREATE_TOP = CROSSOVER_CREATE_TOP
 
+        self.__fitness_norm_list = None
+
         print("Created 'FakeUserGeneticAlgorithm with 'Elitism' - best individual will not be mutated")
 
 
 
     def init_agents(self, n_fake_users, n_items):
         return [AttackAgent(n_fake_users, n_items, POS_RATIO=self.POS_RATIO, BINARY=self.CONVERT_BINARY) for _ in range(self.POP_SIZE)]
-
 
     def fitness(self, agents):
 
@@ -72,26 +79,42 @@ class FakeUserGeneticAlgorithm:
         # return it as fitness
         return agents
 
+    def selection_roulette(self, agents):
+        sum_fitness = sum(list(map(lambda x: x.fitness, agents)))
+        for agent in agents:
+            agent.fitness_norm = agent.fitness / sum_fitness
+        self.__fitness_norm_list = np.array(list(map(lambda x: x.fitness_norm, agents)))
+        return agents
 
-    def selection(self, agents):
+    def selection_tournament(self, agents):
         """
-            Sorts the pool, removes old indviduals that are over GENERATIONS_BEFORE_REMOVAL and are worse than REMOVE_PERCENTILE in score
-            """
+        Sorts the pool, removes old indviduals that are over GENERATIONS_BEFORE_REMOVAL and are worse than REMOVE_PERCENTILE in score
+        """
         # update age
         for agent in agents:
             agent.age += 1
         # sort by fitness best to worse
         agents = sorted(agents, key=lambda x: x.fitness, reverse=True)
         # get 5% worst
-        fitness_treshold = agents[int((1-self.SELECTION_REMOVE_PERCENTILE) * len(agents))].fitness
+        fitness_treshold = agents[int((1 - self.SELECTION_REMOVE_PERCENTILE) * len(agents))].fitness
         # remove agents that are over age and their fitness is low
-        #TODO: check this, not should be easier to understand
-        remove_func = lambda x: not(x.age > self.SELECTION_GENERATIONS_BEFORE_REMOVAL or x.fitness < fitness_treshold)
+        # TODO: check this, not should be easier to understand
+        remove_func = lambda x: not (x.age > self.SELECTION_GENERATIONS_BEFORE_REMOVAL or x.fitness < fitness_treshold)
         agents_removed_worst = list(filter(remove_func, agents))
         return agents_removed_worst
 
         # sort by fitness, take 2 best agents
         # keep best one in pool
+
+
+    def selection(self, agents):
+        if self.SELECTION_MODE == 'TOURNAMENT':
+            return self.selection_tournament(agents)
+        elif self.SELECTION_MODE == 'ROULETTE':
+            return self.selection_roulette(agents)
+        else:
+            raise ValueError('selection - not supported mode')
+
 
     @staticmethod
     def pair_crossover(agent1, agent2, cur_generation):
@@ -114,18 +137,32 @@ class FakeUserGeneticAlgorithm:
         return offspring_1, offspring_2
 
     def crossover(self, agents, cur_generation):
-        new_agents = []
-        top_candidates = agents[:self.CROSSOVER_CREATE_TOP]
-        for pair in combinations(top_candidates, 2):
-            offspring_1, offspring_2 = self.pair_crossover(pair[0], pair[1], cur_generation)
-            new_agents.append(offspring_1)
-            new_agents.append(offspring_2)
-        agents = new_agents + agents
-        if self.MAX_POP_SIZE:
-            agents = agents[:self.MAX_POP_SIZE]
+        if self.SELECTION_MODE == 'TOURNAMENT':
+            new_agents = []
+            top_candidates = agents[:self.CROSSOVER_CREATE_TOP]
+            for pair in combinations(top_candidates, 2):
+                offspring_1, offspring_2 = self.pair_crossover(pair[0], pair[1], cur_generation)
+                new_agents.append(offspring_1)
+                new_agents.append(offspring_2)
+            agents = new_agents + agents
+            if self.MAX_POP_SIZE:
+                agents = agents[:self.MAX_POP_SIZE]
 
-        return agents, len(new_agents)
-    # return offspring_1, offspring_2
+            return agents, len(new_agents)
+            # return offspring_1, offspring_2
+
+        elif self.SELECTION_MODE == 'ROULETTE':
+            # sample MAX_POOL SIZE agents from distribution of fitness_norm.
+            new_agents = []
+            while len(new_agents) < self.MAX_POP_SIZE:
+                idx1, idx2 = np.random.choice(np.arange(len(agents)), p=self.__fitness_norm_list, size=(2,))
+                if idx1 != idx2:
+                    offspring_1, offspring_2 = self.pair_crossover(agents[idx1], agents[idx2], cur_generation)
+                    new_agents.append(offspring_1)
+                    new_agents.append(offspring_2)
+
+            return self.selection_roulette(agents), None
+
     def mutation(self, agents):
         # mutation utility functions
         def bit_flip_func_binary(x):
@@ -225,7 +262,7 @@ def main():
     N_FAKE_USERS = 10
     N_ITEMS = 2000
     # BINARY = False  # binary or non binary data
-    POS_RATIO = 0.5 # Ratio pos/ neg ratio  one percent from each user
+    POS_RATIO = 0.01 # Ratio pos/ neg ratio  one percent from each user
 
     # print(AttackAgent(N_FAKE_USERS, N_ITEMS).gnome)
     N_GENERATIONS = 1000
@@ -238,7 +275,8 @@ def main():
                                   MUTATE_BIT_PROB=MUTATE_BIT_PROB,
                                   CONVERT_BINARY=True,
                                   POS_RATIO=POS_RATIO,
-                                  CROSSOVER_CREATE_TOP=CROSSOVER_CREATE_TOP)
+                                  CROSSOVER_CREATE_TOP=CROSSOVER_CREATE_TOP,
+                                  SELECTION_MODE='ROULETTE')
 
     agents = ga.init_agents(n_fake_users=N_FAKE_USERS, n_items= N_ITEMS)
     # tb = SummaryWriter(comment = f'test_{POS_RATIO}_{SELECTION_GENERATIONS_BEFORE_REMOVAL}_{SELECTION_REMOVE_PERCENTILE}_{MUTATE_USER_PROB}_{MUTATE_BIT_PROB}_{CROSSOVER_CREATE_TOP}')

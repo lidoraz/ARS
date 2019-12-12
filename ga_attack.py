@@ -227,7 +227,7 @@ def fitness(agents,train_set_subset, attack_params):
         return _fitness_single(agents,train_set_subset, attack_params)
 
  # An example for running the model and evaluating using leave-1-out and top-k using hit ratio and NCDG metrics
-def main(n_fake_users, pop_size = 500, max_pop_size=100,train_frac=0.01, n_generations = 1000):
+def main(n_fake_users, pop_size = 500, max_pop_size=100,train_frac=0.01, n_generations = 1000, save_dir = 'agents'):
     logger = logging.getLogger('ga_attack')
     logger.setLevel(logging.DEBUG)
     fh = logging.FileHandler(f'logs/exp_u{n_fake_users}_pop{max_pop_size}_t{train_frac}.log')
@@ -262,13 +262,16 @@ def main(n_fake_users, pop_size = 500, max_pop_size=100,train_frac=0.01, n_gener
     ga = FakeUserGeneticAlgorithm(POP_SIZE=pop_size,
                                   MAX_POP_SIZE=max_pop_size,
                                   N_GENERATIONS=n_generations,
+                                  #TODO remove these when using roulette
                                   SELECTION_GENERATIONS_BEFORE_REMOVAL=SELECTION_GENERATIONS_BEFORE_REMOVAL,
                                   SELECTION_REMOVE_PERCENTILE=SELECTION_REMOVE_PERCENTILE,
+                                  # up here
                                   MUTATE_USER_PROB=MUTATE_USER_PROB,
                                   MUTATE_BIT_PROB=MUTATE_BIT_PROB,
                                   CONVERT_BINARY=CONVERT_BINARY,
                                   POS_RATIO=POS_RATIO,
-                                  CROSSOVER_CREATE_TOP=CROSSOVER_CREATE_TOP)
+                                  CROSSOVER_CREATE_TOP=CROSSOVER_CREATE_TOP,
+                                  SELECTION_MODE='ROULETTE')
 
     agents = ga.init_agents(n_fake_users, n_movies)
     logger.info(f" created n_agents={len(agents)} , Training each agent with {train_frac:0.0%} of training set ({int(train_frac * len(train_set[0]))} real training samples)")
@@ -289,12 +292,12 @@ def main(n_fake_users, pop_size = 500, max_pop_size=100,train_frac=0.01, n_gener
               f"avg={mean:.4f}\tstd={std:.4f}\t"f"fit[{t2:0.2f}s]\t"
               f"all[{t4:0.2f}m]\tmem_usage={max_mem_usage: 0.3} GB")
 
-        ga.save(agents, n_fake_users, train_frac)
+        ga.save(agents, n_fake_users, train_frac, save_dir=save_dir)
         print('saved to file...', cur_generation)
         agents = ga.selection(agents)
         agents, n_new_agents = ga.crossover(agents, cur_generation)
         agents = ga.mutation(agents)
-    ga.save(agents, n_fake_users, train_frac, n_generations)
+    ga.save(agents, n_fake_users, train_frac, save_dir=save_dir)
         # print(f'G:{cur_generation}\tfitness_:[{t1:0.2f}s]\toverall_time:[{t2:0.2f}s]\telapsed:[{((time() - t0_s) / 60):0.2f}m]')
 import fire
 
