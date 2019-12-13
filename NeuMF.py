@@ -17,22 +17,6 @@ The best NeuMF model is saved to Pretrain/ml-1m_NeuMF_8_[64,32,16,8]_1571230994.
 
 
 '''
-import logging
-import numpy as np
-# import tensorflow.keras
-# from keras import backend as K
-import keras
-from keras import initializers
-from keras.regularizers import l1, l2
-from keras.models import Sequential, Model
-from keras.layers import Dense, Lambda, Activation
-from keras.layers import Embedding, Input, Dense, Reshape, Flatten, Dropout
-from keras.optimizers import Adagrad, Adam, SGD, RMSprop
-# from evaluate import evaluate_model
-# from Dataset import Dataset
-from time import time
-import sys
-# import GMF, MLP
 import argparse
 from Constants import SEED
 
@@ -75,10 +59,17 @@ def parse_args():
                         help='Specify the pretrain model file for MLP part. If empty, no pretrain will be used')
     return parser.parse_args()
 
-def init_normal(shape, name=None):
-    return initializers.normal(shape, scale=0.01, name=name)
+# def init_normal(shape, name=None):
+#     return initializers.normal(shape, scale=0.01, name=name)
 
 def get_model(num_users, num_items, mf_dim=10, layers=[10], reg_layers=[0], reg_mf=0):
+    import keras
+    from keras import initializers
+    from keras.regularizers import l1, l2
+    from keras.models import Sequential, Model
+    from keras.layers import Dense, Lambda, Activation
+    from keras.layers import Embedding, Input, Dense, Reshape, Flatten, Dropout
+
     assert len(layers) == len(reg_layers)
     num_layer = len(layers) #Number of layers in the MLP
     # Input variables
@@ -124,72 +115,3 @@ def get_model(num_users, num_items, mf_dim=10, layers=[10], reg_layers=[0], reg_
                   outputs=[prediction])
     
     return model
-
-
-from Evalute import evaluate_model
-from DataLoader import *
-
-# if __name__ == '__main__':
-#     args = parse_args()
-#     num_epochs = args.epochs
-#     batch_size = args.batch_size
-#     mf_dim = args.num_factors
-#     layers = eval(args.layers)
-#     reg_mf = args.reg_mf
-#     reg_layers = eval(args.reg_layers)
-#     num_negatives = args.num_neg
-#     learning_rate = args.lr
-#     learner = args.learner
-#     verbose = args.verbose
-#     mf_pretrain = args.mf_pretrain
-#     mlp_pretrain = args.mlp_pretrain
-#
-#     topK = 10
-#     print("NeuMF arguments: %s " %(args))
-#     model_out_file = 'Pretrain/%s_NeuMF_%d_%s_%d.h5' %(args.dataset, mf_dim, args.layers, time())
-#
-#     # Loading data
-#     t1 = time()
-#     # df = get_movielens1m(convert_binary=True)
-#     # movielens100k , movielens1m
-#     dataset_name = 'movielens100k'
-#     df = get_from_dataset_name(dataset_name, convert_binary=True)
-#     data = Data(seed=42)
-#     train_set, test_set, n_users, n_movies = data.pre_processing(df)
-#     model = get_model(n_users, n_movies, mf_dim, layers, reg_layers, reg_mf)
-#     model.compile(optimizer=Adam(lr=learning_rate), loss='binary_crossentropy')
-#     print('get_model done')
-#
-#     (mean_hr, mean_ndcg) = evaluate_model(model, test_set)
-#     best_hr, best_ndcg, best_iter = mean_hr, mean_ndcg, -1
-#
-#     # if args.out > 0:
-#     #     model.save_weights(model_out_file, overwrite=True)
-#         # Training model
-#     for epoch in range(num_epochs):
-#         t1 = time()
-#         (user_input, item_input, labels) = train_set
-#
-#         # Training
-#         hist = model.fit([np.array(user_input), np.array(item_input)], #input
-#                          np.array(labels), # labels
-#                          batch_size=batch_size, epochs=1, verbose=1, shuffle=True)
-#         t2 = time()
-#         mean_hr, mean_ndcg = evaluate_model(model, test_set)
-#         print('Iteration: %d Fit:[%.1f s]: HR = %.4f, NDCG = %.4f, loss = %.4f, Eval:[%.1f s]'
-#               % (epoch+1, t2 - t1, mean_hr, mean_ndcg, hist.history['loss'][0], time() - t2))
-#         # train_set = data.shuffle_training(train_set)
-#     # else:
-#     #
-#     #     model_out_file = 'Pretrain/ml-1m_NeuMF_8_[64,32,16,8]_1571090710.h5'
-#     #     print('Loading from:', model_out_file)
-#     #     model.load_weights(model_out_file)
-#     #     epoch = 0
-#     #     t2 = time()
-#     #     (hits, ndcgs) = evaluate_model(model, testRatings, testNegatives, topK, evaluation_threads)
-#     #
-#     #     hr, ndcg, loss = np.array(hits).mean(), np.array(ndcgs).mean(), 0
-#     #     print('Iteration %d [%.1f s]: HR = %.4f, NDCG = %.4f, loss = %.4f [%.1f s]'
-#     #           % (epoch, t2 - t1, hr, ndcg, loss, time() - t2))
-#
-#

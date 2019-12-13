@@ -46,10 +46,7 @@ class FakeUserGeneticAlgorithm:
         self.POP_SIZE = POP_SIZE
         self.MAX_POP_SIZE = MAX_POP_SIZE
         self.N_GENERATIONS = N_GENERATIONS
-
         self.SELECTION_MODE = SELECTION_MODE
-        print('SELECTION_MODE:', SELECTION_MODE)
-
         self.SELECTION_GENERATIONS_BEFORE_REMOVAL = SELECTION_GENERATIONS_BEFORE_REMOVAL
         self.SELECTION_REMOVE_PERCENTILE = SELECTION_REMOVE_PERCENTILE
         self.MUTATE_USER_PROB = MUTATE_USER_PROB
@@ -60,7 +57,8 @@ class FakeUserGeneticAlgorithm:
 
         self.__fitness_norm_list = None
 
-        print("Created 'FakeUserGeneticAlgorithm with 'Elitism' - best individual will not be mutated")
+        if SELECTION_MODE == 'TOURNAMENT':
+            print("Created 'FakeUserGeneticAlgorithm with 'Elitism' - best individual will not be mutated")
 
 
 
@@ -80,8 +78,9 @@ class FakeUserGeneticAlgorithm:
         return agents
 
     def selection_roulette(self, agents):
-        sum_fitness = sum(list(map(lambda x: x.fitness, agents)))
+        sum_fitness = sum(list(map(lambda x: x.fitness, agents)))  # work around for negative probabilities
         for agent in agents:
+            assert agent.fitness >= 0, "Fitness cannot be negative"
             agent.fitness_norm = agent.fitness / sum_fitness
         self.__fitness_norm_list = np.array(list(map(lambda x: x.fitness_norm, agents)))
         return agents
@@ -154,7 +153,7 @@ class FakeUserGeneticAlgorithm:
         elif self.SELECTION_MODE == 'ROULETTE':
             # sample MAX_POOL SIZE agents from distribution of fitness_norm.
             new_agents = []
-            while len(new_agents) < self.MAX_POP_SIZE:
+            while len(new_agents) < self.POP_SIZE:
                 idx1, idx2 = np.random.choice(np.arange(len(agents)), p=self.__fitness_norm_list, size=(2,))
                 if idx1 != idx2:
                     offspring_1, offspring_2 = self.pair_crossover(agents[idx1], agents[idx2], cur_generation)
@@ -199,7 +198,7 @@ class FakeUserGeneticAlgorithm:
         return agents
 
     @staticmethod
-    def get_stats_writer(agents, cur_generation, tb):
+    def get_stats_writer(agents, cur_generation, best_max_fit, tb):
         # Gather all the fitnesses in one list and print the stats
         fits = [ind.fitness for ind in agents]
 
@@ -210,11 +209,42 @@ class FakeUserGeneticAlgorithm:
         max_fit = max(fits)
         min_fit = min(fits)
         tb.add_scalar('max_fit', max_fit, cur_generation)
+        tb.add_scalar('best_max_fit', best_max_fit, cur_generation)
         tb.add_scalar('min_fit', min_fit, cur_generation)
         tb.add_scalar('mean_fit', mean, cur_generation)
         tb.add_scalar('std_fit', std, cur_generation)
         tb.add_scalar('pool_size', length, cur_generation)
         tb.close()
+        return length, min_fit, max_fit, mean, std
+        # print(f"G:{cur_generation}\tp_size:{length}\tmin:{min(fits):.2f}\tmax:{max(fits):.2f}\tavg:{mean:.2f}\tstd:{std:.2f}")
+        # print(f"Best agent index: {np.argmax(fits)}")
+
+
+    #TODO: move this to other place, not here
+    @staticmethod
+    def get_stats_writer_random(agents, cur_generation, tb, BEST_MAX_FIT_RANDOM):
+        # Gather all the fitnesses in one list and print the stats
+        fits = [ind.fitness for ind in agents]
+
+        length = len(agents)
+        mean = sum(fits) / length
+        sum2 = sum(x * x for x in fits)
+        std = abs(sum2 / length - mean ** 2) ** 0.5
+        max_fit = max(fits)
+        min_fit = min(fits)
+        #TODO EDIT THIS to be in class
+        max_fit = max(BEST_MAX_FIT_RANDOM, max_fit)
+
+
+        tb.add_scalar('max_fit', max_fit, cur_generation)
+        tb.add_scalar('min_fit', min_fit, cur_generation)
+        tb.add_scalar('mean_fit', mean, cur_generation)
+        tb.add_scalar('std_fit', std, cur_generation)
+        tb.add_scalar('pool_size', length, cur_generation)
+        tb.close()
+
+
+
         return length, min_fit, max_fit, mean, std
         # print(f"G:{cur_generation}\tp_size:{length}\tmin:{min(fits):.2f}\tmax:{max(fits):.2f}\tavg:{mean:.2f}\tstd:{std:.2f}")
         # print(f"Best agent index: {np.argmax(fits)}")
@@ -233,12 +263,13 @@ class FakeUserGeneticAlgorithm:
         return length, min_fit, max_fit, mean, std
         # return length, min_fit, max_fit, mean, std
     @staticmethod
-    def save(agents, n_fake_users, train_frac, save_dir='agents'):
+    def save(agents, n_fake_users, train_frac, cur_generation, save_dir='agents'):
         import pickle
         import os
         # g={cur_generation}
         with open(os.path.join(save_dir, f'agents_dump_n_fake={n_fake_users}_t={train_frac}.dmp'), 'wb') as file:
             pickle.dump(agents, file)
+        print('saved in generation=', cur_generation)
 
 
 

@@ -152,7 +152,7 @@ def get_fitness_single(agent, train_set, attack_params):
     t5 = time()
     delta_hr = attack_params['best_base_hr'] - best_pert_hr
     delta_ndcg = attack_params['best_base_ndcg'] - best_pert_ndcg
-    agent_fitness = max(delta_hr, 0)  #work around for negative probabilities
+    agent_fitness = delta_hr
     # agent_fitness = (2 * delta_hr * delta_ndcg) / (delta_hr + delta_ndcg)  # harmonic mean between deltas
     if VERBOSE:
         # print(f'id={agent.id} total_time={t5-t0:0.2f}s'
@@ -227,26 +227,20 @@ def fitness(agents,train_set_subset, attack_params):
         return _fitness_single(agents,train_set_subset, attack_params)
 
  # An example for running the model and evaluating using leave-1-out and top-k using hit ratio and NCDG metrics
-def main(n_fake_users, pop_size = 100, max_pop_size=100,train_frac=0.01, n_generations = 1000, selection_mode='ROULETTE',save_dir = 'agents'):
+def main(n_fake_users, train_frac=0.01, n_generations = 1000, pos_ratio = 0.02, pop_size = 2000, save_dir = 'agents'):
     logger = logging.getLogger('ga_attack')
     logger.setLevel(logging.DEBUG)
-    fh = logging.FileHandler(f'logs/exp_s={selection_mode}_u={n_fake_users}_pop={max_pop_size}_t={train_frac}.log')
+    fh = logging.FileHandler(f'logs/random_exp_u={n_fake_users}_t={train_frac}.log')
     fh.setFormatter(logging.Formatter('%(asctime)s - %(message)s'))
     logger.addHandler(fh)
     logger.info('PARAMS')
     logger.info('*Baseline Model Params*')
-    logger.info(f'DATASET_NAME={DATASET_NAME}, max_pop_size={max_pop_size} TEST_SET_PERCENTAGE={TEST_SET_PERCENTAGE},'
+    logger.info(f'DATASET_NAME={DATASET_NAME}, TEST_SET_PERCENTAGE={TEST_SET_PERCENTAGE},'
           f' BASE_MODEL_EPOCHS={BASE_MODEL_EPOCHS}, CONVERT_BINARY={CONVERT_BINARY}')
-    logger.info('**GA Hyperparams**')
-    logger.info(f'POP_SIZE={pop_size}, N_GENERATIONS={n_generations}, CROSSOVER_TOP= {CROSSOVER_CREATE_TOP}')
-    logger.info(f'MUTATE_USER_PROB={MUTATE_USER_PROB}, MUTATE_BIT_PROB={MUTATE_BIT_PROB}')
-    logger.info(f'SELECTION_GENERATIONS_BEFORE_REMOVAL={SELECTION_GENERATIONS_BEFORE_REMOVAL}, SELECTION_REMOVE_PERCENTILE={SELECTION_REMOVE_PERCENTILE} ')
     logger.info('***ATTACK PARAMS***')
 
     logger.info(f'n_fake_users={n_fake_users}, TRAINING_SET_AGENT_FRAC={TRAINING_SET_AGENT_FRAC}')
     logger.info(f'POS_RATIO={POS_RATIO}, MODEL_P_EPOCHS={MODEL_P_EPOCHS}')
-    logger.info(f'CONCURRENT={CONCURRENT}')
-
 
     model, weights_path, train_set, test_set, n_users, n_movies, best_hr, best_ndcg = train_base_model(n_fake_users)
     baseline_model_weights = model.get_weights()
@@ -260,7 +254,7 @@ def main(n_fake_users, pop_size = 100, max_pop_size=100,train_frac=0.01, n_gener
 
 
     ga = FakeUserGeneticAlgorithm(POP_SIZE=pop_size,
-                                  MAX_POP_SIZE=max_pop_size,
+                                  MAX_POP_SIZE=0,
                                   N_GENERATIONS=n_generations,
                                   #TODO remove these when using roulette
                                   SELECTION_GENERATIONS_BEFORE_REMOVAL=SELECTION_GENERATIONS_BEFORE_REMOVAL,
@@ -269,40 +263,32 @@ def main(n_fake_users, pop_size = 100, max_pop_size=100,train_frac=0.01, n_gener
                                   MUTATE_USER_PROB=MUTATE_USER_PROB,
                                   MUTATE_BIT_PROB=MUTATE_BIT_PROB,
                                   CONVERT_BINARY=CONVERT_BINARY,
-                                  POS_RATIO=POS_RATIO,
+                                  POS_RATIO=pos_ratio,
                                   CROSSOVER_CREATE_TOP=CROSSOVER_CREATE_TOP,
-                                  SELECTION_MODE=selection_mode)
+                                  SELECTION_MODE=0)
 
-    agents = ga.init_agents(n_fake_users, n_movies)
-    logger.info(f" created n_agents={len(agents)} , Training each agent with {train_frac:0.0%} of training set ({int(train_frac * len(train_set[0]))} real training samples)")
+
     t0 = time()
     ##### Logging
     # TODO: Look on this: CREATING STATIONARY TRAINING SUBSET - attack may overfit to this particular training')
     # train_set_subset = create_subset(train_set, train_frac=train_frac)
-    tb = SummaryWriter(comment=f'-exp_s={selection_mode}_u={n_fake_users}_pop={max_pop_size}_t={train_frac}')
-    best_maxfit = 0
-    best_maxfit_g = 0
+    tb = SummaryWriter(comment=f'-random_exp__u={n_fake_users}_t={train_frac}')
+    BEST_MAX_FIT_RANDOM = 0
     for cur_generation in range(1, n_generations):
         t1 = time()
+        agents = ga.init_agents(n_fake_users, n_movies)
         train_set_subset = create_subset(train_set, train_frac=train_frac)
         agents = fitness(agents,train_set_subset, attack_params)
         t2 = time() - t1
         t4 = (time() - t0) / 60
-        pool_size, min_fit, max_fit, mean, std = ga.get_stats_writer(agents, cur_generation, tb)
-        if max_fit > best_maxfit:
-            best_maxfit_g = cur_generation
-            best_maxfit = max_fit
-            ga.save(agents, n_fake_users, train_frac, save_dir=save_dir)
+        pool_size, min_fit, max_fit, mean, std = ga.get_stats_writer_random(agents, cur_generation, tb, BEST_MAX_FIT_RANDOM)
+        if max_fit > BEST_MAX_FIT_RANDOM:
+            BEST_MAX_FIT_RANDOM = max_fit
         max_mem_usage = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / (10 ** 6)  #linux computes in kbytes, while mac in bytes
-        logger.info(f"G={cur_generation}\tp_size={pool_size}\tcreated={CROSSOVER_CREATE_TOP* (CROSSOVER_CREATE_TOP-1)}\t"
-              f"min={min_fit:.4f}\tmax={max_fit:.4f}\tbest_max{best_maxfit: 0.4f}(G={best_maxfit_g})"
-              f"avg={mean:.4f}\tstd={std:.4f}\tfit[{t2:0.2f}s]\t"
+        logger.info(f"G={cur_generation}\tp_size={pool_size}\tcreated={CROSSOVER_CREATE_TOP* (CROSSOVER_CREATE_TOP-1)}\tmin={min_fit:.4f}\tmax={max_fit:.4f}\t"
+              f"avg={mean:.4f}\tstd={std:.4f}\t"f"fit[{t2:0.2f}s]\t"
               f"all[{t4:0.2f}m]\tmem_usage={max_mem_usage: 0.3} GB")
-        print('saved to file...', cur_generation)
-        agents = ga.selection(agents)
-        agents, _ = ga.crossover(agents, cur_generation)
-        agents = ga.mutation(agents)
-    # ga.save(agents, n_fake_users, train_frac, save_dir=save_dir)
+
         # print(f'G:{cur_generation}\tfitness_:[{t1:0.2f}s]\toverall_time:[{t2:0.2f}s]\telapsed:[{((time() - t0_s) / 60):0.2f}m]')
 import fire
 

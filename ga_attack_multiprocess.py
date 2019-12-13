@@ -1,25 +1,85 @@
 import os
 import resource
-import multiprocessing
+
+
 os.environ['RUN_MODE'] = '4'
 os.environ['KMP_DUPLICATE_LIB_OK'] = 'True'
 os.environ['KMP_WARNINGS'] = '0'
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 
+from multiprocessing import Process, Queue
+from queue import Empty
+import sys
+
+
+def process_function(in_agents_queue: Queue, out_fitness_queue, train_set, attack_params):
+    print('started process...', os.getpid(), os.getppid())
+    import tensorflow as tf
+    tf.logging.set_verbosity(tf.logging.ERROR)
+    model = load_base_model(attack_params['n_fake_users'])
+    model_base_weights = model.get_weights()
+    while True:
+        try:
+            idx, agent  = in_agents_queue.get(block=True, timeout=3)  # block on lock for 3 sec
+            model.set_weights(model_base_weights)
+            agent_fitness = get_fitness_single(agent, train_set, attack_params, model)
+            out_fitness_queue.put((idx, agent_fitness))
+        except Empty: # Empty Exception
+            print('got Empty Exception...', os.getpid())
+            break
+
+
+
+def multiprocess_fitness(agents, training_set, attack_params, N_PROCESSES = 4):
+    print('Started multiprocess_fitness')
+    in_agents_queue = Queue()
+    out_fitness_queue = Queue()
+
+    for idx, agent in enumerate(agents):
+        in_agents_queue.put((idx, agent))
+    processes = []
+
+    for i in range(N_PROCESSES):
+        p = Process(target=process_function, args=(in_agents_queue, out_fitness_queue, training_set, attack_params))
+        p.daemon = True
+        processes.append(p)
+        p.start()
+    for p in processes:
+        p.join()
+
+    print('multiprocess_fitness finished')
+    while not out_fitness_queue.empty():
+        idx, agent_fitness = out_fitness_queue.get()
+        agents[idx].fitness = agent_fitness
+
+    return agents
+    # TODO: return out_fitness_queue
+    # for i in range n_available_proccesses
+        # init process i
+        # p.start()
+    # for i in range n_available_proccesses
+        #p.join()
+    # fitness has been finished for this generation.
+
+
+
+
+
+
+
 import logging
-from keras import backend as K
 from NeuMF import get_model
-from keras.optimizers import Adam
+
 
 from ga import FakeUserGeneticAlgorithm
-from Evalute import baseline_train_evalute_model, pert_train_evaluate_model\
+from Evalute import baseline_train_evalute_model, pert_train_evaluate_model
     # , plot
 from Data import *
 
-import tensorflow as tf
-from keras.models import model_from_json
 
-tf.logging.set_verbosity(tf.logging.ERROR)
+
+
+# tf.logging.set_verbosity(tf.logging.ERROR)
 
 ml1m = 'movielens1m'
 ml100k = 'movielens100k'
@@ -71,6 +131,26 @@ np.random.seed(42)
 # Verbose: 2 - print all in addition to iteration for each agent.
 import json
 
+
+
+def get_base_stats(n_fake_users):
+    df = get_from_dataset_name(DATASET_NAME, CONVERT_BINARY)
+    data = Data(seed=SEED)
+    train_set, test_set, n_users, n_movies = data.pre_processing(df, test_percent=TEST_SET_PERCENTAGE)
+    # n_users_w_mal = n_users + n_fake_users + 1
+    model_path = f'{BASE_MODEL_DIR}/NeuMF_u{n_fake_users}_e{BASE_MODEL_EPOCHS}.json'
+    metrics_path = f'{BASE_MODEL_DIR}/NeuMF_u{n_fake_users}_e{BASE_MODEL_EPOCHS}_metrics.json'
+    weights_path = f'{BASE_MODEL_DIR}/NeuMF_u{n_fake_users}_e{BASE_MODEL_EPOCHS}_w.h5'
+
+    assert os.path.exists(model_path)
+    print('Model exists, loading..')
+    with open(metrics_path, 'r') as metrics_file:
+        # model = load_base_model(n_fake_users)
+        metrics = json.load(metrics_file)
+        best_hr = metrics['best_hr']
+        best_ndcg = metrics['best_ndcg']
+    return weights_path, train_set, test_set, n_users, n_movies, best_hr, best_ndcg
+
 def train_base_model(n_fake_users):
     """
     this should be the best model according to the evalute process, in terms of HR and NDCG
@@ -92,53 +172,50 @@ def train_base_model(n_fake_users):
     model_path = f'{BASE_MODEL_DIR}/NeuMF_u{n_fake_users}_e{BASE_MODEL_EPOCHS}.json'
     metrics_path = f'{BASE_MODEL_DIR}/NeuMF_u{n_fake_users}_e{BASE_MODEL_EPOCHS}_metrics.json'
     weights_path = f'{BASE_MODEL_DIR}/NeuMF_u{n_fake_users}_e{BASE_MODEL_EPOCHS}_w.h5'
-    if not os.path.exists(model_path):
-        print(model_path, 'does not exists.. creating a baseline model')
-        print('REGULAR PHASE')
-        model = get_model(n_users_w_mal, n_movies, mf_dim, layers, reg_layers, reg_mf)
-        model.compile(optimizer=Adam(lr=learning_rate), loss=loss_func)
-        print('get_model done')
-        model_base, best_hr, best_ndcg = baseline_train_evalute_model(model, train_set, test_set, batch_size=batch_size,
-                                                                      epochs=BASE_MODEL_EPOCHS)
-        print('baseline_train_evalute_model done')
-        model_json = model_base.to_json()
-        model_base.save_weights(weights_path)
-        with open(model_path, "w") as json_file:
-            json_file.write(model_json)
-        with open(metrics_path, 'w') as metrics_file:
-            json.dump({'best_hr': best_hr, 'best_ndcg': best_ndcg}, metrics_file)
-        print('Saved model and weights at dir:', BASE_MODEL_DIR)
-    else:
-        print('Model exists, loading..')
-        with open(metrics_path, 'r') as metrics_file:
-            model = load_base_model(n_fake_users)
-            metrics = json.load(metrics_file)
-            best_hr = metrics['best_hr']
-            best_ndcg = metrics['best_ndcg']
-    return model, weights_path, train_set, test_set, n_users, n_movies, best_hr, best_ndcg
+    # if not os.path.exists(model_path):
+
+    print(model_path, 'does not exists.. creating a baseline model')
+    print('REGULAR PHASE')
+    model = get_model(n_users_w_mal, n_movies, mf_dim, layers, reg_layers, reg_mf)
+    from keras.optimizers import Adam
+    model.compile(optimizer=Adam(lr=learning_rate), loss=loss_func)
+    print('get_model done')
+    model_base, best_hr, best_ndcg = baseline_train_evalute_model(model, train_set, test_set, batch_size=batch_size,
+                                                                  epochs=BASE_MODEL_EPOCHS)
+    print('baseline_train_evalute_model done')
+    model_json = model_base.to_json()
+    model_base.save_weights(weights_path)
+    with open(model_path, "w") as json_file:
+        json_file.write(model_json)
+    with open(metrics_path, 'w') as metrics_file:
+        json.dump({'best_hr': best_hr, 'best_ndcg': best_ndcg}, metrics_file)
+    print('Saved model and weights at dir:', BASE_MODEL_DIR)
 
 def load_base_model(n_fake_users):
+    from keras.models import model_from_json
     model_path = f'{BASE_MODEL_DIR}/NeuMF_u{n_fake_users}_e{BASE_MODEL_EPOCHS}.json'
     weights_path = f'{BASE_MODEL_DIR}/NeuMF_u{n_fake_users}_e{BASE_MODEL_EPOCHS}_w.h5'
-
     with open(model_path, 'r') as json_file:
         loaded_model_json = json_file.read()
     model = model_from_json(loaded_model_json)
     model.load_weights(weights_path)
+    from keras.optimizers import Adam
     model.compile(optimizer=Adam(lr=0.001), loss='binary_crossentropy')
     return model
 
-def get_fitness_single(agent, train_set, attack_params):
+def get_fitness_single(agent, train_set, attack_params, model):
     """
     Main function used to create attack per agent
     Cannot run concurrently
     Notes: pert_train_evaluate_model takes 95% of the time for this function, rest of the functions here are minor
     """
+    # import time
+    # time.sleep(1)
+    # agent_fitness = np.random.rand()
+
     t0 = time()
     batch_size = 512
-    # model = load_base_model(attack_params['n_fake_users'])
-    model = attack_params['model']
-    model.set_weights(attack_params['baseline_model_weights']) # must reset weights to baseline each time an agent gets evaluated
+
     attack_df = convert_attack_agent_to_input_df(agent)
     malicious_training_set = create_training_instances_malicious(df=attack_df, user_item_matrix=agent.gnome,
                                                                  n_users=attack_params['n_users'], num_negatives=4)
@@ -152,7 +229,8 @@ def get_fitness_single(agent, train_set, attack_params):
     t5 = time()
     delta_hr = attack_params['best_base_hr'] - best_pert_hr
     delta_ndcg = attack_params['best_base_ndcg'] - best_pert_ndcg
-    agent_fitness = max(delta_hr, 0)  #work around for negative probabilities
+    agent_fitness = max(delta_hr, 0)
+
     # agent_fitness = (2 * delta_hr * delta_ndcg) / (delta_hr + delta_ndcg)  # harmonic mean between deltas
     if VERBOSE:
         # print(f'id={agent.id} total_time={t5-t0:0.2f}s'
@@ -163,50 +241,6 @@ def get_fitness_single(agent, train_set, attack_params):
         print(f'id:{agent.id}\tratio:{beign_malicious_ratio:0.2f}\tage:{agent.age}\tΔhr:{delta_hr:0.4f}\tΔndcg:{delta_ndcg:0.4f}\tf:{agent_fitness:0.4f}\ttotal_time={t5-t0:0.1f}s')
     return agent_fitness
     # return sum(sum(agent.gnome))
-
-
-# TODO: Thread pool will not be idieal here, process pool or something like that might be better with shared resources.
-# def _fitness_concurrent(agents, train_set, attack_params):
-#     """
-#     Runs concurrent...
-#     :param agents:
-#     :param n_users:
-#     :param train_set:
-#     :param test_set:
-#     :param best_base_hr:
-#     :param best_base_ndcg:
-#     :return:
-#     """
-#     from concurrent.futures.thread import ThreadPoolExecutor
-#     import tensorflow as tf
-#     executor = ThreadPoolExecutor(max_workers=CONCURRENT)
-#
-#     def eval_fitness_func(agent):
-#         raise EnvironmentError('this causes oom problems')
-#         if not agent.evaluted:
-#             # workaround for tensorflow, each task creates a new graph
-#             # with tf.Graph() as graph:
-#             # tf.Graph().
-#             with tf.Graph().as_default() as graph:
-#                 with tf.Session(graph=graph) as sess:
-#                     K.set_session(sess)
-#                     agent_fitness = __get_fitness(agent, train_set, attack_params)
-#             # gc.collect()
-#                             # K.clear_session() # TODO: could be problemmatirc
-#                             # tf.compat.v1.reset_default_graph()
-#             # tf.reset_default_graph()  # TODO: THIS FIXES THE PROBLEM
-#             # graph.close()
-#             return agent_fitness
-#
-#         else:
-#             return agent.fitness
-#
-#     fitness_list = list(executor.map(eval_fitness_func, agents))
-#     for idx, agent in enumerate(agents):
-#         agent.fitness = fitness_list[idx]
-#         agent.evluated = True
-#     return agents
-
 
 def _fitness_single(agents,train_set, attack_params):
     # for agent in tqdm(agents, total=len(agents)):
@@ -227,32 +261,38 @@ def fitness(agents,train_set_subset, attack_params):
         return _fitness_single(agents,train_set_subset, attack_params)
 
  # An example for running the model and evaluating using leave-1-out and top-k using hit ratio and NCDG metrics
-def main(n_fake_users, pop_size = 100, max_pop_size=100,train_frac=0.01, n_generations = 1000, selection_mode='ROULETTE',save_dir = 'agents'):
+def main(mode, n_fake_users, pop_size = 500, max_pop_size=100,train_frac=0.01, n_generations = 1000, n_processes = 4, save_dir = 'agents',):
+
+    # TODO: Must train model in another process before.
+    if mode == 'TRAIN':
+        train_base_model(n_fake_users)
+        exit(0)
+    assert mode == 'ATTACK' , 'not supported'
+
+    weights_path, train_set, test_set, n_users, n_movies, best_hr, best_ndcg = get_base_stats(n_fake_users)
     logger = logging.getLogger('ga_attack')
     logger.setLevel(logging.DEBUG)
-    fh = logging.FileHandler(f'logs/exp_s={selection_mode}_u={n_fake_users}_pop={max_pop_size}_t={train_frac}.log')
+    fh = logging.FileHandler(f'logs/exp_u{n_fake_users}_pop{pop_size}_t{train_frac}.log')
     fh.setFormatter(logging.Formatter('%(asctime)s - %(message)s'))
+    logger.addHandler(logging.StreamHandler(sys.stdout))
     logger.addHandler(fh)
     logger.info('PARAMS')
     logger.info('*Baseline Model Params*')
     logger.info(f'DATASET_NAME={DATASET_NAME}, max_pop_size={max_pop_size} TEST_SET_PERCENTAGE={TEST_SET_PERCENTAGE},'
-          f' BASE_MODEL_EPOCHS={BASE_MODEL_EPOCHS}, CONVERT_BINARY={CONVERT_BINARY}')
+                f' BASE_MODEL_EPOCHS={BASE_MODEL_EPOCHS}, CONVERT_BINARY={CONVERT_BINARY}')
     logger.info('**GA Hyperparams**')
     logger.info(f'POP_SIZE={pop_size}, N_GENERATIONS={n_generations}, CROSSOVER_TOP= {CROSSOVER_CREATE_TOP}')
     logger.info(f'MUTATE_USER_PROB={MUTATE_USER_PROB}, MUTATE_BIT_PROB={MUTATE_BIT_PROB}')
-    logger.info(f'SELECTION_GENERATIONS_BEFORE_REMOVAL={SELECTION_GENERATIONS_BEFORE_REMOVAL}, SELECTION_REMOVE_PERCENTILE={SELECTION_REMOVE_PERCENTILE} ')
+    logger.info(
+        f'SELECTION_GENERATIONS_BEFORE_REMOVAL={SELECTION_GENERATIONS_BEFORE_REMOVAL}, SELECTION_REMOVE_PERCENTILE={SELECTION_REMOVE_PERCENTILE} ')
     logger.info('***ATTACK PARAMS***')
 
     logger.info(f'n_fake_users={n_fake_users}, TRAINING_SET_AGENT_FRAC={TRAINING_SET_AGENT_FRAC}')
     logger.info(f'POS_RATIO={POS_RATIO}, MODEL_P_EPOCHS={MODEL_P_EPOCHS}')
-    logger.info(f'CONCURRENT={CONCURRENT}')
 
-
-    model, weights_path, train_set, test_set, n_users, n_movies, best_hr, best_ndcg = train_base_model(n_fake_users)
-    baseline_model_weights = model.get_weights()
     attack_params = {'n_users': n_users, 'n_movies': n_movies, 'best_base_hr': best_hr, 'best_base_ndcg': best_ndcg,
                      'n_fake_users': n_fake_users, 'test_set': test_set,
-                     'baseline_model_weights': baseline_model_weights, 'model': model,
+                     # 'baseline_model_weights': baseline_model_weights, 'model': model,
                      }
     logger.info(f'Trained Base model: n_real_users={n_users}\tn_movies={n_movies}\t'
           f'Baseline Metrics: best_hr={best_hr:0.4f}\tbest_ndcg={best_ndcg:0.4f}')
@@ -262,7 +302,7 @@ def main(n_fake_users, pop_size = 100, max_pop_size=100,train_frac=0.01, n_gener
     ga = FakeUserGeneticAlgorithm(POP_SIZE=pop_size,
                                   MAX_POP_SIZE=max_pop_size,
                                   N_GENERATIONS=n_generations,
-                                  #TODO remove these when using roulette
+
                                   SELECTION_GENERATIONS_BEFORE_REMOVAL=SELECTION_GENERATIONS_BEFORE_REMOVAL,
                                   SELECTION_REMOVE_PERCENTILE=SELECTION_REMOVE_PERCENTILE,
                                   # up here
@@ -271,37 +311,37 @@ def main(n_fake_users, pop_size = 100, max_pop_size=100,train_frac=0.01, n_gener
                                   CONVERT_BINARY=CONVERT_BINARY,
                                   POS_RATIO=POS_RATIO,
                                   CROSSOVER_CREATE_TOP=CROSSOVER_CREATE_TOP,
-                                  SELECTION_MODE=selection_mode)
+                                  SELECTION_MODE='ROULETTE')
 
     agents = ga.init_agents(n_fake_users, n_movies)
     logger.info(f" created n_agents={len(agents)} , Training each agent with {train_frac:0.0%} of training set ({int(train_frac * len(train_set[0]))} real training samples)")
     t0 = time()
-    ##### Logging
     # TODO: Look on this: CREATING STATIONARY TRAINING SUBSET - attack may overfit to this particular training')
     # train_set_subset = create_subset(train_set, train_frac=train_frac)
-    tb = SummaryWriter(comment=f'-exp_s={selection_mode}_u={n_fake_users}_pop={max_pop_size}_t={train_frac}')
-    best_maxfit = 0
-    best_maxfit_g = 0
+    tb = SummaryWriter(comment=f'---exp_pid={os.getpid()}_u{n_fake_users}_pop{pop_size}_t{train_frac}')
+    best_max_fit = 0
+    best_max_fit_g = 0
     for cur_generation in range(1, n_generations):
         t1 = time()
         train_set_subset = create_subset(train_set, train_frac=train_frac)
-        agents = fitness(agents,train_set_subset, attack_params)
+        agents = multiprocess_fitness(agents, train_set_subset, attack_params, n_processes)
         t2 = time() - t1
         t4 = (time() - t0) / 60
-        pool_size, min_fit, max_fit, mean, std = ga.get_stats_writer(agents, cur_generation, tb)
-        if max_fit > best_maxfit:
-            best_maxfit_g = cur_generation
-            best_maxfit = max_fit
-            ga.save(agents, n_fake_users, train_frac, save_dir=save_dir)
+        pool_size, min_fit, max_fit, mean, std = ga.get_stats_writer(agents, cur_generation, best_max_fit, tb)
+        if max_fit > best_max_fit:
+            best_max_fit_g = cur_generation
+            best_max_fit = max_fit
+            ga.save(agents, n_fake_users, train_frac, cur_generation, save_dir=save_dir)
         max_mem_usage = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / (10 ** 6)  #linux computes in kbytes, while mac in bytes
         logger.info(f"G={cur_generation}\tp_size={pool_size}\tcreated={CROSSOVER_CREATE_TOP* (CROSSOVER_CREATE_TOP-1)}\t"
-              f"min={min_fit:.4f}\tmax={max_fit:.4f}\tbest_max{best_maxfit: 0.4f}(G={best_maxfit_g})"
+              f"min={min_fit:.4f}\tmax={max_fit:.4f}\t best_max={best_max_fit:.4f}(G={best_max_fit_g})\t"
               f"avg={mean:.4f}\tstd={std:.4f}\tfit[{t2:0.2f}s]\t"
               f"all[{t4:0.2f}m]\tmem_usage={max_mem_usage: 0.3} GB")
-        print('saved to file...', cur_generation)
+
         agents = ga.selection(agents)
-        agents, _ = ga.crossover(agents, cur_generation)
+        agents, n_new_agents = ga.crossover(agents, cur_generation)
         agents = ga.mutation(agents)
+
     # ga.save(agents, n_fake_users, train_frac, save_dir=save_dir)
         # print(f'G:{cur_generation}\tfitness_:[{t1:0.2f}s]\toverall_time:[{t2:0.2f}s]\telapsed:[{((time() - t0_s) / 60):0.2f}m]')
 import fire
