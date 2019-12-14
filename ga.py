@@ -1,6 +1,9 @@
 import numpy as np
 import uuid
 from itertools import combinations
+import logging
+
+logger = logging.getLogger('ga_attack')
 
 """
 Generic FakeUserGeneticAlgorithm class
@@ -57,8 +60,20 @@ class FakeUserGeneticAlgorithm:
 
         self.__fitness_norm_list = None
 
+
+
         if SELECTION_MODE == 'TOURNAMENT':
-            print("Created 'FakeUserGeneticAlgorithm with 'Elitism' - best individual will not be mutated")
+            created = CROSSOVER_CREATE_TOP * (CROSSOVER_CREATE_TOP - 1)
+            logger.info(f"Selection='TOURNAMENT'.. Will create {created} new agents every generation, remove them according to parameters")
+            logger.info(f'Maximum pool size: {MAX_POP_SIZE} (if 0 - do not kill bad performing individuals because space limit.')
+            # estimated_pool_size = created - (0.05 * self.POP_SIZE)
+            logger.info("Created 'FakeUserGeneticAlgorithm with 'Elitism' - best individual will not be mutated")
+        elif SELECTION_MODE == 'ROULETTE':
+            logger.info(f"Selection='ROULETTE'.. Will re-create the population every generation based on normalized probabilities")
+        elif SELECTION_MODE == 'RANDOM':
+            logger.info("*******Selection='RANDOM'.. simulates a complete random behaviour, GA will not utilize")
+        else:
+            raise ValueError(f'SELECTION_MODE={SELECTION_MODE} not supported')
 
 
 
@@ -89,17 +104,13 @@ class FakeUserGeneticAlgorithm:
         """
         Sorts the pool, removes old indviduals that are over GENERATIONS_BEFORE_REMOVAL and are worse than REMOVE_PERCENTILE in score
         """
-        # update age
-        for agent in agents:
+        for agent in agents:  # update age
             agent.age += 1
-        # sort by fitness best to worse
-        agents = sorted(agents, key=lambda x: x.fitness, reverse=True)
-        # get 5% worst
-        fitness_treshold = agents[int((1 - self.SELECTION_REMOVE_PERCENTILE) * len(agents))].fitness
-        # remove agents that are over age and their fitness is low
-        # TODO: check this, not should be easier to understand
-        remove_func = lambda x: not (x.age > self.SELECTION_GENERATIONS_BEFORE_REMOVAL or x.fitness < fitness_treshold)
-        agents_removed_worst = list(filter(remove_func, agents))
+        agents = sorted(agents, key=lambda x: x.fitness, reverse=True)  # sort by fitness best to worse
+        fitness_treshold = agents[int((1 - self.SELECTION_REMOVE_PERCENTILE) * len(agents))].fitness  # get 5% worst
+        # keep young agents or best performing ones
+        keep_func = lambda x: x.age < self.SELECTION_GENERATIONS_BEFORE_REMOVAL or x.fitness > fitness_treshold
+        agents_removed_worst = list(filter(keep_func, agents))
         return agents_removed_worst
 
         # sort by fitness, take 2 best agents
@@ -122,10 +133,6 @@ class FakeUserGeneticAlgorithm:
         the cross over will take bunch of users from each attack, and mix them up together,
         the cross over will not change the ratings themselvs, only the rows.
         make also with the hall of fame
-        :param agent1:
-        :param agent2:
-        :param cur_generation:
-        :return:
         """
         agent_1_part_prefix = agent1.gnome[:agent1.gnome.shape[0] // 2]
         agent_1_part_postfix = agent1.gnome[agent1.gnome.shape[0] // 2:]
@@ -147,8 +154,7 @@ class FakeUserGeneticAlgorithm:
             if self.MAX_POP_SIZE:
                 agents = agents[:self.MAX_POP_SIZE]
 
-            return agents, len(new_agents)
-            # return offspring_1, offspring_2
+            return agents
 
         elif self.SELECTION_MODE == 'ROULETTE':
             # sample MAX_POOL SIZE agents from distribution of fitness_norm.
@@ -160,7 +166,7 @@ class FakeUserGeneticAlgorithm:
                     new_agents.append(offspring_1)
                     new_agents.append(offspring_2)
 
-            return self.selection_roulette(agents), None
+            return self.selection_roulette(agents)
 
     def mutation(self, agents):
         # mutation utility functions
@@ -198,7 +204,7 @@ class FakeUserGeneticAlgorithm:
         return agents
 
     @staticmethod
-    def get_stats_writer(agents, cur_generation, best_max_fit, tb):
+    def get_stats_writer(agents, cur_generation, best_max_fit, baseline_fit, tb):
         # Gather all the fitnesses in one list and print the stats
         fits = [ind.fitness for ind in agents]
 
@@ -208,13 +214,15 @@ class FakeUserGeneticAlgorithm:
         std = abs(sum2 / length - mean ** 2) ** 0.5
         max_fit = max(fits)
         min_fit = min(fits)
-        tb.add_scalar('max_fit', max_fit, cur_generation)
-        tb.add_scalar('best_max_fit', best_max_fit, cur_generation)
-        tb.add_scalar('min_fit', min_fit, cur_generation)
-        tb.add_scalar('mean_fit', mean, cur_generation)
-        tb.add_scalar('std_fit', std, cur_generation)
-        tb.add_scalar('pool_size', length, cur_generation)
-        tb.close()
+        if tb:
+            tb.add_scalar('max_fit', max_fit, cur_generation)
+            tb.add_scalar('best_max_fit', best_max_fit, cur_generation)
+            tb.add_scalar('%DropInHR', best_max_fit/baseline_fit, cur_generation)
+            tb.add_scalar('min_fit', min_fit, cur_generation)
+            tb.add_scalar('mean_fit', mean, cur_generation)
+            tb.add_scalar('std_fit', std, cur_generation)
+            tb.add_scalar('pool_size', length, cur_generation)
+            tb.close()
         return length, min_fit, max_fit, mean, std
         # print(f"G:{cur_generation}\tp_size:{length}\tmin:{min(fits):.2f}\tmax:{max(fits):.2f}\tavg:{mean:.2f}\tstd:{std:.2f}")
         # print(f"Best agent index: {np.argmax(fits)}")
@@ -235,15 +243,12 @@ class FakeUserGeneticAlgorithm:
         #TODO EDIT THIS to be in class
         max_fit = max(BEST_MAX_FIT_RANDOM, max_fit)
 
-
         tb.add_scalar('max_fit', max_fit, cur_generation)
         tb.add_scalar('min_fit', min_fit, cur_generation)
         tb.add_scalar('mean_fit', mean, cur_generation)
         tb.add_scalar('std_fit', std, cur_generation)
         tb.add_scalar('pool_size', length, cur_generation)
         tb.close()
-
-
 
         return length, min_fit, max_fit, mean, std
         # print(f"G:{cur_generation}\tp_size:{length}\tmin:{min(fits):.2f}\tmax:{max(fits):.2f}\tavg:{mean:.2f}\tstd:{std:.2f}")
@@ -263,18 +268,19 @@ class FakeUserGeneticAlgorithm:
         return length, min_fit, max_fit, mean, std
         # return length, min_fit, max_fit, mean, std
     @staticmethod
-    def save(agents, n_fake_users, train_frac, cur_generation, save_dir='agents'):
+    def save(agents, n_fake_users, train_frac, cur_generation, selection, save_dir='agents'):
         import pickle
         import os
         # g={cur_generation}
-        with open(os.path.join(save_dir, f'agents_dump_n_fake={n_fake_users}_t={train_frac}.dmp'), 'wb') as file:
+        with open(os.path.join(save_dir, f'agents_m={selection}_dump_n_fake={n_fake_users}_t={train_frac}.dmp'), 'wb') as file:
             pickle.dump(agents, file)
-        print('saved in generation=', cur_generation)
+        logger.info('saved in generation=', cur_generation)
 
 
 
 def main():
     from tensorboardX import SummaryWriter
+
 
     # HYPER-PARAMETERS
     POP_SIZE = 100
@@ -297,6 +303,8 @@ def main():
 
     # print(AttackAgent(N_FAKE_USERS, N_ITEMS).gnome)
     N_GENERATIONS = 1000
+
+    selection_mode = 'TOURNAMENT' # 'ROULETTE'
     ga = FakeUserGeneticAlgorithm(POP_SIZE=POP_SIZE,
                                   MAX_POP_SIZE=MAX_POP_SIZE,
                                   N_GENERATIONS=N_GENERATIONS,
@@ -307,7 +315,7 @@ def main():
                                   CONVERT_BINARY=True,
                                   POS_RATIO=POS_RATIO,
                                   CROSSOVER_CREATE_TOP=CROSSOVER_CREATE_TOP,
-                                  SELECTION_MODE='ROULETTE')
+                                  SELECTION_MODE=selection_mode)
 
     agents = ga.init_agents(n_fake_users=N_FAKE_USERS, n_items= N_ITEMS)
     # tb = SummaryWriter(comment = f'test_{POS_RATIO}_{SELECTION_GENERATIONS_BEFORE_REMOVAL}_{SELECTION_REMOVE_PERCENTILE}_{MUTATE_USER_PROB}_{MUTATE_BIT_PROB}_{CROSSOVER_CREATE_TOP}')
@@ -320,7 +328,7 @@ def main():
         ga.print_stats(agents, n_created, cur_generation)
 
         agents = ga.selection(agents)
-        agents, n_created = ga.crossover(agents, cur_generation)
+        agents = ga.crossover(agents, cur_generation)
         agents = ga.mutation(agents)
 
 

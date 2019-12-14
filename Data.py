@@ -19,6 +19,7 @@ from Constants import SEED
 np.random.seed(SEED)
 
 def create_training_instances_malicious(df,  user_item_matrix, n_users, num_negatives= 4):
+    # for each of the attack df entries, sample #num_negative items and create a mal_training_set
     user_input, item_input, labels = [], [], []
     negative_items = {user: np.argwhere(user_item_matrix[user]==0).flatten() for user in df['user_id'].unique()}
     for index, row in df.iterrows():
@@ -31,9 +32,8 @@ def create_training_instances_malicious(df,  user_item_matrix, n_users, num_nega
             user_input.append(user)
             item_input.append(neg_item)
             labels.append(0)
-
+    # add n_users offset for the mal training set (e.g. #0 user will become #943 - this ok, last user in org training set is 942
     training_set = (np.array(user_input) + n_users, np.array(item_input), np.array(labels))
-    # print('len(training_set):', len(training_set))
     return training_set
 
 def create_subset(train_set, train_frac = 1.0):

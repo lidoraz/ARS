@@ -96,10 +96,9 @@ def pert_train_evaluate_model(model, train_set, test_set, batch_size=512, epochs
     # mean_hr, mean_ndcg, time_eval = evaluate_model(model, test_set, verbose=2)
     for epoch in range(epochs):
         t1 = time()
-
         loss = model.fit([user_input, item_input],  # input
                      labels,  # labels
-                     batch_size=batch_size, verbose=0, shuffle=False)
+                     batch_size=batch_size, verbose=0, shuffle=True)
         t2 = time()
         mean_hr, mean_ndcg, time_eval = evaluate_model(model, test_set, verbose=0)
         if verbose > 1:
@@ -132,19 +131,14 @@ def evaluate_model(model, test_set, k= 10, verbose=1):
     user_list = list(test_set.keys())
     negatives_list = list(test_set.values())
     hits, ndcgs = [], []
-    times = []
     for idx in range(len(user_list)):     # Single thread
-        t0 = time()
         (hr, ndcg) = eval_one_rating(model, idx, user_list, negatives_list, k)
-        t1 = time()
-        times.append(t1-t0)
         hits.append(hr)
         ndcgs.append(ndcg)
     mean_hr, mean_ndcg = np.array(hits).mean(), np.array(ndcgs).mean()
     time_eval = time() - t0
     if verbose > 1:
-        print('Init: HR = %.4f, NDCG = %.4f, Eval:[%.2f s]'
-              % (mean_hr, mean_ndcg, time_eval))
+        print('Init: HR = %.4f, NDCG = %.4f, Eval:[%.2f s]' % (mean_hr, mean_ndcg, time_eval))
     return mean_hr, mean_ndcg, time_eval
 
 
