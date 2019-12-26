@@ -2,7 +2,7 @@ import numpy as np
 import uuid
 from itertools import combinations
 import logging
-
+from time import time
 logger = logging.getLogger('ga_attack')
 
 """
@@ -43,37 +43,42 @@ class AttackAgent:
 
 
 class FakeUserGeneticAlgorithm:
-    def __init__(self, POP_SIZE,MAX_POP_SIZE, N_GENERATIONS, SELECTION_GENERATIONS_BEFORE_REMOVAL,
-                 SELECTION_REMOVE_PERCENTILE, MUTATE_USER_PROB, MUTATE_BIT_PROB, CONVERT_BINARY, POS_RATIO,CROSSOVER_CREATE_TOP, SELECTION_MODE='TOURNAMENT'):
+    def __init__(self, ga_params, tb, baseline):
 
-        self.POP_SIZE = POP_SIZE
-        self.MAX_POP_SIZE = MAX_POP_SIZE
-        self.N_GENERATIONS = N_GENERATIONS
-        self.SELECTION_MODE = SELECTION_MODE
-        self.SELECTION_GENERATIONS_BEFORE_REMOVAL = SELECTION_GENERATIONS_BEFORE_REMOVAL
-        self.SELECTION_REMOVE_PERCENTILE = SELECTION_REMOVE_PERCENTILE
-        self.MUTATE_USER_PROB = MUTATE_USER_PROB
-        self.MUTATE_BIT_PROB = MUTATE_BIT_PROB
-        self.CONVERT_BINARY = CONVERT_BINARY
-        self.POS_RATIO = POS_RATIO
-        self.CROSSOVER_CREATE_TOP = CROSSOVER_CREATE_TOP
+        self.baseline_fit = baseline
+        self.tb = None
+        self.POP_SIZE =                             ga_params['POP_SIZE']
+        self.MAX_POP_SIZE =                         ga_params['MAX_POP_SIZE']
+        self.N_GENERATIONS =                        ga_params['N_GENERATIONS']
+        self.SELECTION_MODE =                       ga_params['SELECTION_MODE']
+        self.SELECTION_GENERATIONS_BEFORE_REMOVAL = ga_params['SELECTION_GENERATIONS_BEFORE_REMOVAL']
+        self.SELECTION_REMOVE_PERCENTILE =          ga_params['SELECTION_REMOVE_PERCENTILE']
+        self.MUTATE_USER_PROB =                     ga_params['MUTATE_USER_PROB']
+        self.MUTATE_BIT_PROB =                      ga_params['MUTATE_BIT_PROB']
+        self.CONVERT_BINARY =                       ga_params['CONVERT_BINARY']
+        self.POS_RATIO =                            ga_params['POS_RATIO']
+        self.CROSSOVER_CREATE_TOP =                 ga_params['CROSSOVER_CREATE_TOP']
 
         self.__fitness_norm_list = None
+        self.best_max_fit = 0
+        self.best_max_fit_g = 0
+        self.best_max_mean_rating_ratio = 0
 
+        self.start_time = time()
+        self.curr_generation_time = self.start_time
 
-
-        if SELECTION_MODE == 'TOURNAMENT':
-            created = CROSSOVER_CREATE_TOP * (CROSSOVER_CREATE_TOP - 1)
+        if self.SELECTION_MODE == 'TOURNAMENT':
+            created = self.CROSSOVER_CREATE_TOP * (self.CROSSOVER_CREATE_TOP - 1)
             logger.info(f"Selection='TOURNAMENT'.. Will create {created} new agents every generation, remove them according to parameters")
-            logger.info(f'Maximum pool size: {MAX_POP_SIZE} (if 0 - do not kill bad performing individuals because space limit.')
+            logger.info(f'Maximum pool size: {self.MAX_POP_SIZE} (if 0 - do not kill bad performing individuals because space limit.')
             # estimated_pool_size = created - (0.05 * self.POP_SIZE)
             logger.info("Created 'FakeUserGeneticAlgorithm with 'Elitism' - best individual will not be mutated")
-        elif SELECTION_MODE == 'ROULETTE':
+        elif self.SELECTION_MODE == 'ROULETTE':
             logger.info(f"Selection='ROULETTE'.. Will re-create the population every generation based on normalized probabilities")
-        elif SELECTION_MODE == 'RANDOM':
+        elif self.SELECTION_MODE == 'RANDOM':
             logger.info("*******Selection='RANDOM'.. simulates a complete random behaviour, GA will not utilize")
         else:
-            raise ValueError(f'SELECTION_MODE={SELECTION_MODE} not supported')
+            raise ValueError(f'SELECTION_MODE={self.SELECTION_MODE} not supported')
 
 
 
@@ -203,8 +208,7 @@ class FakeUserGeneticAlgorithm:
         # this will work on every entry, to create stohastic behaviour, kind of epsilon greedy method.
         return agents
 
-    @staticmethod
-    def get_stats_writer(agents, cur_generation, best_max_fit, baseline_fit, tb):
+    def get_stats_writer(self, agents, cur_generation):
         # Gather all the fitnesses in one list and print the stats
         fits = [ind.fitness for ind in agents]
 
@@ -214,45 +218,39 @@ class FakeUserGeneticAlgorithm:
         std = abs(sum2 / length - mean ** 2) ** 0.5
         max_fit = max(fits)
         min_fit = min(fits)
-        if tb:
-            tb.add_scalar('max_fit', max_fit, cur_generation)
-            tb.add_scalar('best_max_fit', best_max_fit, cur_generation)
-            tb.add_scalar('%DropInHR', best_max_fit/baseline_fit, cur_generation)
-            tb.add_scalar('min_fit', min_fit, cur_generation)
-            tb.add_scalar('mean_fit', mean, cur_generation)
-            tb.add_scalar('std_fit', std, cur_generation)
-            tb.add_scalar('pool_size', length, cur_generation)
-            tb.close()
-        return length, min_fit, max_fit, mean, std
-        # print(f"G:{cur_generation}\tp_size:{length}\tmin:{min(fits):.2f}\tmax:{max(fits):.2f}\tavg:{mean:.2f}\tstd:{std:.2f}")
-        # print(f"Best agent index: {np.argmax(fits)}")
 
+        found_new_best = False
+        if max_fit > self.best_max_fit:
+            self.best_max_fit = max_fit
+            self.best_max_fit_g = cur_generation
+            self.best_max_mean_rating_ratio = np.mean(agents[np.argmax(fits)].gnome)
+            found_new_best = True
+        max_mean_rating_ratio = np.mean(agents[np.argmax(fits)].gnome)
+        
+        if self.tb:
+            self.tb.add_scalar('max_fit', max_fit, cur_generation)
+            self.tb.add_scalar('max_pos_ratio', max_mean_rating_ratio, cur_generation)
+            self.tb.add_scalar('best_max_fit', self.best_max_fit, cur_generation)
+            self.tb.add_scalar('best_max_pos_ratio', self.best_max_mean_rating_ratio, cur_generation)
+            # _DropInHR
+            self.tb.add_scalar('%DropInHR', self.best_max_fit / self.baseline_fit, cur_generation)
+            # tb.add_scalar('HRPercentDrop', best_max_fit/baseline_fit, cur_generation)
+            self.tb.add_scalar('min_fit', min_fit, cur_generation)
+            self.tb.add_scalar('mean_fit', mean, cur_generation)
+            self.tb.add_scalar('std_fit', std, cur_generation)
+            self.tb.add_scalar('pool_size', length, cur_generation)
+            self.tb.close()
 
-    #TODO: move this to other place, not here
-    @staticmethod
-    def get_stats_writer_random(agents, cur_generation, tb, BEST_MAX_FIT_RANDOM):
-        # Gather all the fitnesses in one list and print the stats
-        fits = [ind.fitness for ind in agents]
+        t_now = time()
+        t_all = (t_now - self.start_time)/(60**2)
+        t_fit = (t_now - self.curr_generation_time) / 60
+        self.curr_generation_time = time()
 
-        length = len(agents)
-        mean = sum(fits) / length
-        sum2 = sum(x * x for x in fits)
-        std = abs(sum2 / length - mean ** 2) ** 0.5
-        max_fit = max(fits)
-        min_fit = min(fits)
-        #TODO EDIT THIS to be in class
-        max_fit = max(BEST_MAX_FIT_RANDOM, max_fit)
-
-        tb.add_scalar('max_fit', max_fit, cur_generation)
-        tb.add_scalar('min_fit', min_fit, cur_generation)
-        tb.add_scalar('mean_fit', mean, cur_generation)
-        tb.add_scalar('std_fit', std, cur_generation)
-        tb.add_scalar('pool_size', length, cur_generation)
-        tb.close()
-
-        return length, min_fit, max_fit, mean, std
-        # print(f"G:{cur_generation}\tp_size:{length}\tmin:{min(fits):.2f}\tmax:{max(fits):.2f}\tavg:{mean:.2f}\tstd:{std:.2f}")
-        # print(f"Best agent index: {np.argmax(fits)}")
+        logger.info(f"G={cur_generation:2}\tp_size={length}\t"
+                    f"min={min_fit:.4f}\tmax={max_fit:.4f}\tmax_pos_ratio={max_mean_rating_ratio:.4f}\t"
+                    f"best_max={self.best_max_fit:.4f} (G={self.best_max_fit_g})\tbest_max_pos_ratio={self.best_max_mean_rating_ratio:.4f}\t"
+                    f"avg={mean:.4f}\tstd={std:.4f}\tfit[{t_fit:0.2f}m]\tall[{t_all:0.2f}h]")
+        return found_new_best
 
     def print_stats(self, agents, n_created, cur_generation):
         # Gather all the fitnesses in one list and print the stats
@@ -266,7 +264,7 @@ class FakeUserGeneticAlgorithm:
         min_fit = min(fits)
         print(f'G={cur_generation}, P_SIZE={length}, n_created={n_created}, min_fit={min_fit:0.3f}, max_fit={max_fit:0.3f}, mean={mean:0.3f}, std={std:0.3f}')
         return length, min_fit, max_fit, mean, std
-        # return length, min_fit, max_fit, mean, std
+
     @staticmethod
     def save(agents, n_fake_users, train_frac, cur_generation, selection, save_dir='agents'):
         import pickle
@@ -274,8 +272,7 @@ class FakeUserGeneticAlgorithm:
         # g={cur_generation}
         with open(os.path.join(save_dir, f'agents_m={selection}_dump_n_fake={n_fake_users}_t={train_frac}.dmp'), 'wb') as file:
             pickle.dump(agents, file)
-        logger.info('saved in generation=', cur_generation)
-
+        logger.info('saved in generation={}'.format(cur_generation))
 
 
 def main():
