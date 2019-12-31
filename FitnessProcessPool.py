@@ -84,6 +84,7 @@ class FitnessProcessPool:
             p.join()
             logger.info('Process id: {}/{} finished'.format(idx + 1, len(self.processes)))
         logger.info('terminate finished successfully')
+        exit(0)
 
     def receive_signal_stop(self, signalNumber, frame):
         logger.info('Received: SIGSTOP')

@@ -46,6 +46,8 @@ VERBOSE = 0 # Verbose: 2 - print all in addition to iteration for each agent.
 
 
 def get_logger(logger_name, save_logger):
+    import datetime
+    logger_name = datetime.datetime.now().strftime('%Y-%m-%d_') + logger_name
     logger = logging.getLogger('ga_attack')
     logger.setLevel(logging.DEBUG)
     logger.addHandler(logging.StreamHandler(sys.stdout))
@@ -101,6 +103,10 @@ def get_fitness_single(agent, train_set, attack_params, model):
     attack_df = convert_attack_agent_to_input_df(agent)
     malicious_training_set = create_training_instances_malicious(df=attack_df, user_item_matrix=agent.gnome,
                                                                  n_users=attack_params['n_users'], num_negatives=4)
+    # logger = logging.getLogger('ga_attack')
+    # n_malicious_examples_include_negatives = len(malicious_training_set[0])
+    # logger.info('#Attack_df={} #Entries in malicious dataset - {} (includes negative_sampling={}), Which is {}% of poison from real dataset'
+    #             .format(len(attack_df), n_malicious_examples_include_negatives, 4, round((n_malicious_examples_include_negatives / len(train_set[0])) * 100, 2)))
     attack_benign_training_set = concat_and_shuffle(malicious_training_set, train_set)
     best_pert_model, best_pert_hr, best_pert_ndcg = pert_train_evaluate_model(model, attack_benign_training_set,
                                                                               attack_params['test_set'],

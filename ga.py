@@ -46,7 +46,7 @@ class FakeUserGeneticAlgorithm:
     def __init__(self, ga_params, tb, baseline):
 
         self.baseline_fit = baseline
-        self.tb = None
+        self.tb = tb
         self.POP_SIZE =                             ga_params['POP_SIZE']
         self.MAX_POP_SIZE =                         ga_params['MAX_POP_SIZE']
         self.N_GENERATIONS =                        ga_params['N_GENERATIONS']
