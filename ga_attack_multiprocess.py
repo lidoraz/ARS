@@ -135,7 +135,7 @@ def main(n_fake_users=10, selection= 'TOURNAMENT', pop_size= 500, pos_ratio= 0.0
     weights_path, train_set, test_set, n_users, n_movies, best_hr, best_ndcg = get_baseline_stats(n_fake_users)
     logger.info(f'Trained Base model: n_real_users={n_users}\tn_movies={n_movies}\nBaseline Metrics: best_hr={best_hr:0.4f}\tbest_ndcg={best_ndcg:0.4f}')
 
-    tb = SummaryWriter(comment=f'---exp_pid={os.getpid()}_m{selection}_u{n_fake_users}_pop{pop_size}_t{train_frac}') if out_log else None
+    tb = SummaryWriter(comment=f'---exp_pid={os.getpid()}_m{selection}_u{n_fake_users}_pop{pop_size}_t{train_frac}_r{pos_ratio}') if out_log else None
 
     ga_params = {
         'POP_SIZE': pop_size,

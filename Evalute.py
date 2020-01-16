@@ -147,19 +147,12 @@ def eval_one_rating(model, idx, user_list, negatives_list, k):
 
     gtItem = negatives_list[idx][-1]
 
-    map_item_score = {}
     user_arr = np.full(len(negatives_list[idx]), user, dtype='int32')  # creates an array of size len(items) with values of u)
     items = np.array(negatives_list[idx])
     predictions = model.predict([user_arr, items],
-                                 batch_size=100,
                                  verbose=0)  # given user i and set of items, return probability for each of #batch_size items
-    for i in range(len(items)):  # construct an item->score map
-        item = items[i]
-        map_item_score[item] = predictions[i]
-
-    # Evaluate top rank list
-    # equivalent: sorted(map_item_score.items(), key=itemgetter(1), reverse=True)[:k]
-    ranklist = heapq.nlargest(k, map_item_score, key=map_item_score.get)  # get 10 most probable items
+    item_locations = (-predictions.flatten()).argsort()[:k]
+    ranklist = items[item_locations] # get top recommended items according to predictions
     hr = getHitRatio(ranklist, gtItem)  # if the item recommend was part of the test set, return 1 - success
     ndcg = getNDCG(ranklist, gtItem)
     return (hr, ndcg)

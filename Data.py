@@ -60,6 +60,7 @@ def concat_and_shuffle(malicious_training_set, train_set):
                                   attack_benign_training_set[2][p])
     return attack_benign_training_set
 
+
 def convert_attack_agent_to_input_df(agent):
     users, items = np.nonzero(agent.gnome)
     ratings = agent.gnome[(users, items)]
