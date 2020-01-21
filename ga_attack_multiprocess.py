@@ -127,8 +127,9 @@ def get_fitness_single(agent, train_set, attack_params, model):
     return agent_fitness
 
  # An example for running the model and evaluating using leave-1-out and top-k using hit ratio and NCDG metrics
-def main(n_fake_users=10, selection= 'TOURNAMENT', pop_size= 500, pos_ratio= 0.02,
-         max_pop_size=1000, train_frac=0.01, n_generations= 100, n_processes= 4, save_dir= 'agents', out_log=True, save=True):
+def main(n_fake_users=10, selection= 'TOURNAMENT', pop_size= 500, pos_ratio= 0.02, max_pos_ratio=0.15,
+         max_pop_size=1000, train_frac=0.01, n_generations= 100, n_processes= 4, save_dir= 'agents', out_log=True, save=True,
+         SELECTION_GENERATIONS_BEFORE_REMOVAL=500):
 
     logger = get_logger('exp_{}_u{}_pop{}_t{}.log)'.format(selection, n_fake_users, pop_size, train_frac), out_log)
     # selection = 'ROULETTE' # selection = 'ROULETTE'
@@ -147,6 +148,7 @@ def main(n_fake_users=10, selection= 'TOURNAMENT', pop_size= 500, pos_ratio= 0.0
         'MUTATE_BIT_PROB': MUTATE_BIT_PROB,
         'CONVERT_BINARY': CONVERT_BINARY,
         'POS_RATIO': pos_ratio,
+        'MAX_POS_RATIO': max_pos_ratio,
         'CROSSOVER_CREATE_TOP': CROSSOVER_CREATE_TOP,
         'SELECTION_MODE': selection
     }

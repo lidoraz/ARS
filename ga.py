@@ -57,6 +57,7 @@ class FakeUserGeneticAlgorithm:
         self.MUTATE_BIT_PROB =                      ga_params['MUTATE_BIT_PROB']
         self.CONVERT_BINARY =                       ga_params['CONVERT_BINARY']
         self.POS_RATIO =                            ga_params['POS_RATIO']
+        self.MAX_POS_RATIO = ga_params['MAX_POS_RATIO']
         self.CROSSOVER_CREATE_TOP =                 ga_params['CROSSOVER_CREATE_TOP']
 
         self.__fitness_norm_list = None
@@ -153,8 +154,11 @@ class FakeUserGeneticAlgorithm:
             top_candidates = agents[:self.CROSSOVER_CREATE_TOP]
             for pair in combinations(top_candidates, 2):
                 offspring_1, offspring_2 = self.pair_crossover(pair[0], pair[1], cur_generation)
-                new_agents.append(offspring_1)
-                new_agents.append(offspring_2)
+                #TODO add a better filter here
+                if np.mean(offspring_1.gnome) <= self.MAX_POS_RATIO:
+                    new_agents.append(offspring_1)
+                if np.mean(offspring_2.gnome) <= self.MAX_POS_RATIO:
+                    new_agents.append(offspring_2)
             agents = new_agents + agents
             if self.MAX_POP_SIZE:
                 agents = agents[:self.MAX_POP_SIZE]
@@ -168,8 +172,11 @@ class FakeUserGeneticAlgorithm:
                 idx1, idx2 = np.random.choice(np.arange(len(agents)), p=self.__fitness_norm_list, size=(2,))
                 if idx1 != idx2:
                     offspring_1, offspring_2 = self.pair_crossover(agents[idx1], agents[idx2], cur_generation)
-                    new_agents.append(offspring_1)
-                    new_agents.append(offspring_2)
+                    # TODO add a better filter here
+                    if np.mean(offspring_1.gnome) <= self.MAX_POS_RATIO:
+                        new_agents.append(offspring_1)
+                    if np.mean(offspring_2.gnome) <= self.MAX_POS_RATIO:
+                        new_agents.append(offspring_2)
 
             return self.selection_roulette(agents)
 

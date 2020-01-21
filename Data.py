@@ -1,7 +1,5 @@
 # generate train test
 
-# import tensorflow as tf
-
 
 import os
 import numpy as np
@@ -14,9 +12,9 @@ This class takes the loaded movie_lens DataFrame and generates:
 * Test Set
 * Utility functions user_id / movie_id to index
 """
-
-from Constants import SEED
-np.random.seed(SEED)
+#
+# from Constants import SEED
+# np.random.seed(SEED)
 
 def create_training_instances_malicious(df,  user_item_matrix, n_users, num_negatives= 4):
     # for each of the attack df entries, sample #num_negative items and create a mal_training_set

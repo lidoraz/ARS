@@ -4,15 +4,15 @@
 
 
 #nohup nice -10 python ga_attack_multiprocess.py --n_processes=8 --n_fake_users=2 --selection='TOURNAMENT'  --pop_size=700 --max_pop_size=0 --n_generations=100 --train_frac=0.01 &
-nohup nice -10 python ga_attack_multiprocess.py --n_processes=8 --n_fake_users=4 --selection='TOURNAMENT'  --pop_size=1000 --max_pop_size=0 --n_generations=200 --train_frac=0.01 &
-nohup nice -10 python ga_attack_multiprocess.py --n_processes=8 --n_fake_users=8 --selection='TOURNAMENT'  --pop_size=1000 --max_pop_size=0 --n_generations=200 --train_frac=0.01 &
-nohup nice -10 python ga_attack_multiprocess.py --n_processes=8 --n_fake_users=16 --selection='TOURNAMENT' --pop_size=1000 --max_pop_size=0 --n_generations=200 --train_frac=0.01 &
+nohup nice -10 python ga_attack_multiprocess.py --n_processes=16 --n_fake_users=4 --selection='TOURNAMENT'  --pop_size=1000 --max_pop_size=2000 --n_generations=200 --train_frac=0.01 &
+nohup nice -10 python ga_attack_multiprocess.py --n_processes=16 --n_fake_users=8 --selection='TOURNAMENT'  --pop_size=1000 --max_pop_size=2000 --n_generations=200 --train_frac=0.01 &
+nohup nice -10 python ga_attack_multiprocess.py --n_processes=16 --n_fake_users=16 --selection='TOURNAMENT' --pop_size=1000 --max_pop_size=2000 --n_generations=200 --train_frac=0.01 &
 #nohup nice -10 python ga_attack_multiprocess.py --n_processes=8 --n_fake_users=32 --selection='TOURNAMENT'  --pop_size=700 --max_pop_size=0 --n_generations=100 --train_frac=0.01 &
 
 #nohup nice -10 python ga_attack_multiprocess.py --n_processes=8 --n_fake_users=2  --selection='ROULETTE'  --pop_size=1000 --n_generations=100 --train_frac=0.01 &
-nohup nice -10 python ga_attack_multiprocess.py --n_processes=8 --n_fake_users=4  --selection='ROULETTE'  --pop_size=2000 --n_generations=200 --train_frac=0.01 &
-nohup nice -10 python ga_attack_multiprocess.py --n_processes=8 --n_fake_users=8  --selection='ROULETTE'  --pop_size=2000 --n_generations=200 --train_frac=0.01 &
-nohup nice -10 python ga_attack_multiprocess.py --n_processes=8 --n_fake_users=16 --selection='ROULETTE' --pop_size=2000  --n_generations=200 --train_frac=0.01 &
+nohup nice -10 python ga_attack_multiprocess.py --n_processes=8 --n_fake_users=4  --selection='ROULETTE'  --pop_size=2000 --max_pop_size=0 --n_generations=200 --train_frac=0.01 &
+nohup nice -10 python ga_attack_multiprocess.py --n_processes=8 --n_fake_users=8  --selection='ROULETTE'  --pop_size=2000 --max_pop_size=0 --n_generations=200 --train_frac=0.01 &
+nohup nice -10 python ga_attack_multiprocess.py --n_processes=8 --n_fake_users=16 --selection='ROULETTE' --pop_size=2000 --max_pop_size=0 --n_generations=200 --train_frac=0.01 &
 #nohup nice -10 python ga_attack_multiprocess.py --n_processes=8 --n_fake_users=32  --selection='ROULETTE'  --pop_size=1000 --n_generations=100 --train_frac=0.01 &
 
 
