@@ -20,7 +20,8 @@ class FitnessProcessPool:
         pid = os.getpid()
         import tensorflow as tf
         tf.logging.set_verbosity(tf.logging.ERROR)
-        model = load_base_model(attack_params['n_fake_users'])
+        global DATASET_NAME
+        model = load_base_model(attack_params['n_fake_users'], DATASET_NAME)
         model_base_weights = model.get_weights()
 
         while True:

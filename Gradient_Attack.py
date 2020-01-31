@@ -3,7 +3,7 @@ from Data import Data, create_subset
 from Evalute import evaluate_model
 # from Models.SimpleCF import SimpleCF
 # from NeuMF import get_model
-
+from Visualization.visualization import plot_interations, plot_interactions_neg
 import tensorflow as tf
 import os
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
@@ -163,6 +163,8 @@ def create_attack_input(n_fake_users, n_users, n_movies, train_set, attack_ratin
     attack_items = cartesian_prodcut[:, 1]
     attack_output_dim = n_fake_users * n_movies
     attack_ratings_prob = np.full((attack_output_dim,), attack_rating_init_prob)
+    # # swap 1 to 0 and 1 to 0 from legitimate training set: #TODO test
+    # real_rating = 1 - train_set[2]
     attack_input = np.array([np.append(attack_users, train_set[0]),
                              np.append(attack_items, train_set[1]),
                              np.append(attack_ratings_prob, train_set[2])])
@@ -193,8 +195,13 @@ def filter_ratings_by_treshold(attack_users, attack_items, attack_rating_prob, t
     # maybe its better to take top ## instead of rint
     # fig = base_attack_df.r.hist(bins=10) # TODO: make plot
     # base_attack_df.apply(lambda x: x.r_prob > threshold, axis=1)
-    attack_df_filterd = base_attack_df[base_attack_df['r'] > threshold]  # apply on rows, keep only high prob ratings
+    if threshold <= 1:
+        attack_df_filterd = base_attack_df[base_attack_df['r'] > threshold]  # apply on rows, keep only high prob ratings
+    else:
+        attack_df_filterd = base_attack_df.sort_values('r', ascending=False).head(threshold)
     attack_df_filterd['r'] = 1
+
+    plot_interations(attack_df_filterd, DATASET_NAME, 2, 'Attack')
     print('Amount of total poison after filter:', len(attack_df_filterd))
     return attack_df_filterd, len(attack_df_filterd)
 
@@ -206,7 +213,7 @@ def mix_attack_df_with_training_set(mal_training_set, train_set_subset):
           f' train_set_subset={len(train_set_subset[0])}')
     return attack_benign_training_set
 
-def add_negative_samples(attack_df_filterd, num_negatives):
+def add_negative_samples(attack_df_filterd, n_movies, num_negatives):
     """
     get the attacks df and adds a negative sampling for each item, according to training policy.
     combines the df with percentage of training set
@@ -214,18 +221,14 @@ def add_negative_samples(attack_df_filterd, num_negatives):
     :param num_negatives:
     :return: list of (user, item, rating)
     """
-    from tqdm import tqdm
 
     df = attack_df_filterd
     negative_items = {}
     users = list(sorted(df['u'].unique()))
-    # for idx, user in tqdm(enumerate(users), total=len(users),):
     for idx, user in enumerate(users):
-        negative_items[user] = df[df['u'] != user]['i'].unique()
+        negative_items[user] = np.setdiff1d(np.arange(n_movies), attack_df_filterd[attack_df_filterd.u == user].i.values)
 
-    df = df.groupby('u').apply(lambda s: s.sample(frac=1))
     user_input, item_input, labels = [], [], []
-    # for index, row in tqdm(df.iterrows(), total=df.shape[0]):
     for index, row in df.iterrows():
         user = row['u']
         user_input.append(user)
@@ -238,7 +241,7 @@ def add_negative_samples(attack_df_filterd, num_negatives):
             labels.append(0)
 
     mal_training_set = (np.array(user_input), np.array(item_input), np.array(labels))
-    return mal_training_set  # this already has the inputs and negative items
+    return mal_training_set
 
 def generate_fake_ratings(n_fake_users, n_users, n_movies, attack_input, model_path, lamda = 3.5):
     """
@@ -274,15 +277,7 @@ def generate_fake_ratings(n_fake_users, n_users, n_movies, attack_input, model_p
         all_rating = attack_input[2]
         indexes = np.arange(len(all_users))
         for i in range(5):
-            ## todo: There is an issue in creating a shuffle while keeping track in the order of the mal data
-            #         print(i)
-            #         p = np.random.permutation(len(new_labels))
-            #         all_users = all_users[p]
-            #         all_items = all_items[p]
-            #         new_labels = new_labels[p]
-            #         new_labels_before_change = new_labels.copy()
-            #         indexes = indexes[p] # this will help get the mal ratings in order as we started
-
+            
             # mask the gradient such that benign user rating will not be changed
             mask = np.zeros((mal_real_shape,))
             mask[np.argwhere(indexes < output_dim)] = 1
@@ -358,12 +353,37 @@ def train_attack_evalute_batches(N_FAKE_USERS, attack_benign_training_set, test_
             print('{:.3f}\t{:.3f}\t{:.3f}\t{:.3f}'.format(epoch_loss, mean_hr, mean_ndcg, time_eval))
     return epoch_loss, mean_hr, mean_ndcg
 
+def train_attack_evalute_keras(N_FAKE_USERS, attack_benign_training_set, test_set, batch_size, mal_epochs):
+    from ga_attack_multiprocess import load_base_model, get_fitness_single
+    model = load_base_model(N_FAKE_USERS, DATASET_NAME)
+    model_base_weights = model.get_weights()
+    # attack_params = {'n_users': n_users, 'test_set': test_set, 'best_base_hr': }
+
+    # attack_df = convert_attack_agent_to_input_df(agent)
+    # malicious_training_set = create_training_instances_malicious(df=attack_df, user_item_matrix=agent.gnome,
+    #                                                              n_users=n_users, num_negatives=4)
+    # logger = logging.getLogger('ga_attack')
+    # n_malicious_examples_include_negatives = len(malicious_training_set[0])
+    # logger.info('#Attack_df={} #Entries in malicious dataset - {} (includes negative_sampling={}), Which is {}% of poison from real dataset'
+    #             .format(len(attack_df), n_malicious_examples_include_negatives, 4, round((n_malicious_examples_include_negatives / len(train_set[0])) * 100, 2)))
+    from Data import concat_and_shuffle
+    from Evalute import pert_train_evaluate_model
+    # attack_benign_training_set = concat_and_shuffle(malicious_training_set, train_set)
+    mean_hr, mean_ndcg, time_eval = evaluate_model(model, test_set, verbose=0)
+    print('evaluate_model:', mean_hr, mean_ndcg, time_eval)
+    best_pert_model, best_pert_hr, best_pert_ndcg = pert_train_evaluate_model(model, attack_benign_training_set,
+                                                                              test_set,
+                                                                              batch_size=batch_size,
+                                                                              epochs=mal_epochs,
+                                                                              # pert_model_take_best=PERT_MODEL_TAKE_BEST,
+                                                                              verbose=2)
+    return 0, best_pert_hr, best_pert_ndcg
 
 def run_expriment(train_set, train_set_subset, n_users, n_movies, test_set, n_fake_users, threshold, lamda, batch):
     convert_binary = True
     load_model = False
     testset_percentage = 0.2
-    model_path = f"tf_neumf_models/model{n_fake_users}.ckpt"
+    model_path = f"tf_neumf_models/model_{DATASET_NAME}_{n_fake_users}.ckpt"
     print('Started...')
     # TRAIN
     train_model(n_fake_users, n_users, n_movies, train_set, test_set, model_path) # creates a model and saves it
@@ -372,17 +392,18 @@ def run_expriment(train_set, train_set_subset, n_users, n_movies, test_set, n_fa
     attack_rating_prob = generate_fake_ratings(n_fake_users, n_users, n_movies, attack_input, model_path, lamda=lamda)
     attack_df_filtered, poison_amount = filter_ratings_by_treshold(attack_users, attack_items, attack_rating_prob, threshold)
     # ATTACK EVALUATION
-    mal_training_set = add_negative_samples(attack_df_filtered, num_negatives)
+    mal_training_set = add_negative_samples(attack_df_filtered, n_movies, num_negatives)
     # mal_training_set = ([],[],[])
     best_hr = predict(n_fake_users, n_users, n_movies, test_set, model_path)
     attack_benign_training_set = mix_attack_df_with_training_set(mal_training_set, train_set_subset)
-    if not batch:
-        epoch_loss, mean_hr, mean_ndcg = train_attack_evalute(n_fake_users, attack_benign_training_set, test_set, MAL_EPOCHS, n_users, n_movies, model_path)
-    else:
-        batch_size = 512
-        epoch_loss, mean_hr, mean_ndcg = train_attack_evalute_batches(n_fake_users, attack_benign_training_set,
-                                                                      test_set, batch_size, MAL_EPOCHS, n_users, n_movies)
+    # if not batch:
+    #     epoch_loss, mean_hr, mean_ndcg = train_attack_evalute(n_fake_users, attack_benign_training_set, test_set, MAL_EPOCHS, n_users, n_movies, model_path)
+    # else:
 
+    #     epoch_loss, mean_hr, mean_ndcg = train_attack_evalute_batches(n_fake_users, attack_benign_training_set,
+    #                                                                   test_set, batch_size, MAL_EPOCHS, n_users, n_movies)
+    batch_size = 512
+    epoch_loss, mean_hr, mean_ndcg = train_attack_evalute_keras(n_fake_users, attack_benign_training_set, test_set, batch_size, MAL_EPOCHS)
 
     #     print(f'i={i}, mean={mean_hr}')
     return mean_hr, mean_ndcg, poison_amount, best_hr - mean_hr
@@ -398,40 +419,39 @@ batch = True
 # tresholds_list = [0.4, 0.5, 0.6, 0.7, 0.8]
 # n_fake_user_list = [16]
 # TODO: IT seems that the trehshold is much much much more effective than other methods
-tresholds_list = np.linspace(0.9, 0.999, 10)
+# tresholds_list = np.linspace(0.7, 0.9999, 20)
+tresholds_list = np.linspace(10, 10000, 20).astype(int)
+# tresholds_list = [1000]
 # train_frac_list = np.logspace(-4, 0, 10)
 train_frac_list = [0.01]
-# lamda_list = np.linspace(0, 0.3, 10)
-n_fake_user_list = [16]
+# n_fake_user_list = [4, 8, 16, 32, 64]
 lamda_list = [0] # 1/5000
-# n_fake_user_list = [2, 4]
+n_fake_user_list = [16]
 # tresholds_list = [0.4]
 rows = []
-seed = 42
-np.random.seed(42)
-DATASET_NAME = 'movielens100k'
-# DATASET_NAME = 'movielens1m'
+# DATASET_NAME = 'movielens100k'
+DATASET_NAME = 'movielens1m'
 # PREPROCESS
 df = get_from_dataset_name(DATASET_NAME, True)
 data = Data(seed=42)
 train_set, test_set, n_users, n_movies = data.pre_processing(df, test_percent=1)
-
+plot_interactions_neg(train_set, DATASET_NAME, atleast=2, title='Full Training_set')
 for ii, train_frac in enumerate(train_frac_list):
     train_set_subset = create_subset(train_set, train_frac=train_frac)
     for i, n_fake_users in enumerate(n_fake_user_list):
         for j, threshold in enumerate(tresholds_list):
-            for k, lamda in enumerate(lamda_list):
-                try:
-                    mean_hr, mean_ndcg, poison_amount, delta_mean_hr = run_expriment(train_set, train_set_subset, n_users, n_movies,
-                                                                                     test_set, n_fake_users, threshold, lamda, batch)
-                    print(f'Finished exp with: train_frac={train_frac:0.4f}, n_fake_users={n_fake_users}, threshold={threshold}, theta={lamda:0.2f} mean_hr= {mean_hr:0.2f} delta_mean_hr={delta_mean_hr:0.3f}')
-                    rows.append([train_frac, n_fake_users, threshold, lamda, mean_hr, delta_mean_hr, mean_ndcg, poison_amount])
-                except ValueError:
-                    print('could not finish exp with:', n_fake_users, threshold, lamda)
+            lamda = 0
+            try:
+                mean_hr, mean_ndcg, poison_amount, delta_mean_hr = run_expriment(train_set, train_set_subset, n_users, n_movies,
+                                                                                 test_set, n_fake_users, threshold, lamda, batch)
+                print(f'Finished exp with: train_frac={train_frac:0.4f}, n_fake_users={n_fake_users}, threshold={threshold}, theta={lamda:0.2f} mean_hr= {mean_hr:0.2f} delta_mean_hr={delta_mean_hr:0.3f}')
+                rows.append([train_frac, n_fake_users, threshold, lamda, mean_hr, delta_mean_hr, mean_ndcg, poison_amount])
+            except ValueError:
+                print('could not finish exp with:', n_fake_users, threshold, lamda)
 results = pd.DataFrame(np.array(rows), columns =['train_frac', 'n_fake_users', 'threshold', 'theta', 'mean_hr', 'delta_mean_hr', 'mean_ndcg', 'poison_amount'])
 pd.options.display.max_rows = 1000
 # print(results.sort_values('mean_hr'))
-pickle.dump(results, open(f'out_results_extended.pickle', 'wb'))
+pickle.dump(results, open(f'out_results_extended_{DATASET_NAME}.pickle', 'wb'))
 
 
 # attack_params = {'n_fake_users': n_fake_users,

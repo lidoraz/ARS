@@ -78,11 +78,16 @@ def get_baseline_stats(n_fake_users):
     return weights_path, train_set, test_set, n_users, n_movies, best_hr, best_ndcg
 
 
-def load_base_model(n_fake_users):
+def load_base_model(n_fake_users, DATASET_NAME):
     from keras.models import model_from_json
     params_name = f'NeuMF_{DATASET_NAME}_u={n_fake_users}_e={BASE_MODEL_EPOCHS}'
     model_path = f'{BASE_MODEL_DIR}/{params_name}.json'
     weights_path = f'{BASE_MODEL_DIR}/{params_name}_w.h5'
+    if not os.path.exists(model_path):
+        print('Keras model does not exists, training....')
+        from ga_attack_train_baseline import train_base_model
+        train_base_model(n_fake_users, DATASET_NAME)
+
     with open(model_path, 'r') as json_file:
         loaded_model_json = json_file.read()
     model = model_from_json(loaded_model_json)

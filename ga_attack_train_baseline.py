@@ -15,12 +15,12 @@ ml100k = 'movielens100k'
 
 BASE_MODEL_DIR = 'base_models'
 
-np.random.seed(SEED)
+# np.random.seed(SEED)
 
 
 # Dataset Related
 CONVERT_BINARY = True
-DATASET_NAME = ml100k
+# DATASET_NAME = ml100k
 # DATASET_NAME = ml1m
 TEST_SET_PERCENTAGE = 1
 BASE_MODEL_EPOCHS = 15  # will get the best model out of these n epochs.
@@ -28,12 +28,12 @@ BASE_MODEL_EPOCHS = 15  # will get the best model out of these n epochs.
 VERBOSE = 1  # Verbose: 2 - print all in addition to iteration for each agent.
 
 
-def main(n_fake_users=10):
+def train_base_model(n_fake_users=16, DATASET_NAME=ml100k):
     """
     this should be the best model according to the evalute process, in terms of HR and NDCG
     """
     df = get_from_dataset_name(DATASET_NAME, CONVERT_BINARY)
-    data = Data(seed=SEED)
+    data = Data(seed=42)
     train_set, test_set, n_users, n_movies = data.pre_processing(df, test_percent=TEST_SET_PERCENTAGE)
     n_users_w_mal = n_users + n_fake_users + 1
 
@@ -73,4 +73,4 @@ def main(n_fake_users=10):
 import fire
 
 if __name__ == '__main__':
-    fire.Fire(main)
+    fire.Fire(train_base_model)
