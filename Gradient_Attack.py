@@ -2,146 +2,21 @@ from DataLoader import *
 from Data import Data, create_subset
 from Evalute import evaluate_model
 # from Models.SimpleCF import SimpleCF
-# from NeuMF import get_model
+from ga_attack_train_baseline import load_base_model
 from Visualization.visualization import plot_interations, plot_interactions_neg
 import tensorflow as tf
 import os
+import Constants
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 import numpy as np
 
-class Model:
-    def __init__(self, num_users, num_items, mf_dim=8, layers=[64, 32, 16, 8], reg_layers=[0, 0, 0, 0], reg_mf=0, lr=1e-3):
-        with tf.variable_scope('NeuCF_network'):
-            self.user_inp = tf.placeholder(dtype=tf.int32, shape=[None], name='user_input')
-            self.item_inp = tf.placeholder(dtype=tf.int32, shape=[None], name='item_input')
-            self.y_true = tf.placeholder(dtype=tf.float32, shape=[None], name='y_true')
-
-            normal_init = tf.random_normal_initializer(mean=0, stddev=0.01)
-            pred_init = tf.keras.initializers.lecun_uniform(seed=None)
-            # TODO: Add regulaizer
-
-            mf_embedding_user = tf.Variable(normal_init([num_users, mf_dim]), name='mf_embedding_user')
-            mf_embed_user = tf.nn.embedding_lookup(mf_embedding_user, self.user_inp)
-
-            mf_embedding_item = tf.Variable(normal_init([num_items, mf_dim]), name='mf_embedding_item')
-            mf_embed_item = tf.nn.embedding_lookup(mf_embedding_item, self.item_inp)
-
-            mlp_embedding_user = tf.Variable(normal_init([num_users, int(layers[0] / 2)]), name='mlp_embedding_user')
-            mlp_embed_user = tf.nn.embedding_lookup(mlp_embedding_user, self.user_inp)
-
-            mlp_embedding_item = tf.Variable(normal_init([num_items, int(layers[0] / 2)]), name='mlp_embedding_item')
-            mlp_embed_item = tf.nn.embedding_lookup(mlp_embedding_item, self.item_inp)
-
-            # MF part
-            mf_user_latent = tf.reshape(mf_embed_user, [-1, mf_embed_user.shape[-1]])
-            mf_item_latent = tf.reshape(mf_embed_item, [-1, mf_embed_item.shape[-1]])
-            mf_vector = tf.multiply(mf_user_latent, mf_item_latent)
-            # MLP part
-            mlp_user_latent = tf.reshape(mlp_embed_user, [-1, mlp_embed_user.shape[-1]])
-            mlp_item_latent = tf.reshape(mlp_embed_item, [-1, mlp_embed_item.shape[-1]])
-            mlp_vector = tf.concat([mlp_user_latent, mlp_item_latent], axis=-1)
-            num_layer = len(layers)
-            for idx in range(1, num_layer):
-                mlp_vector = tf.layers.dense(mlp_vector, layers[idx], activation=tf.nn.relu, name="layer{}".format(idx))
-
-            self.predict_vector = tf.concat([mf_vector, mlp_vector], axis=-1)
-
-            prediction = tf.layers.dense(inputs=self.predict_vector,
-                                         kernel_initializer=pred_init,
-                                         bias_initializer=pred_init,
-                                         units=1, activation='sigmoid')
-            self.prediction = tf.reshape(prediction, [-1], name='prediction')
-            self.loss = tf.keras.losses.binary_crossentropy(y_pred=self.prediction, y_true=self.y_true)
-            #             self.loss = tf.reduce_mean((self.y_true*tf.log(self.prediction)) + ((1-self.y_true)*tf.log(1-self.prediction))) # (Y_TRUE - PREDICTION)
-            self.optimizer = tf.train.AdamOptimizer(learning_rate=lr)
-            self.train_op = self.optimizer.minimize(self.loss)
-
-class TFPredictWrapper:
-    def __init__(self, model, sess):
-        self.model = model
-        self.sess = sess
-
-    def predict(self, user_item, verbose):
-        [u, i] = user_item
-        model = self.model
-        preds = self.sess.run(model.prediction,
-                         feed_dict={model.user_inp: u,
-                                    model.item_inp: i})
-
-        return preds
-
-def get_model(n_fake_users, n_users, n_movies):
-    num_users = n_fake_users + n_users
-    num_items = n_movies
-    batch_size = 512
-
-    # model params:
-    mf_dim = 8
-    layers = [64, 32, 16, 8]
-    reg_layers = [0, 0, 0, 0]
-    reg_mf = 0
-
-    learning_rate = 0.001
-    model = Model(num_users=num_users,
-                  num_items=num_items,
-                  mf_dim=mf_dim,
-                  layers=layers,
-                  reg_layers=reg_layers,
-                  reg_mf=reg_mf,
-                  lr=learning_rate)
-    # print(f'model with: n_fake_users={n_fake_users}, n_users={n_users}, n_movies={n_movies} created')
-    return model
 
 def get_batches(training_set, batch_size):
+    # training_mat = np.c_[np.column_stack(training_set), indexes]
     training_mat = np.column_stack(training_set)
     np.random.shuffle(training_mat)
     batches = np.array_split(training_mat, training_mat.shape[0] // batch_size)
     return batches
-
-def train_model(N_FAKE_USERS, n_users, n_movies, train_set, test_set, model_path):
-    import os
-    if os.path.exists(model_path + '.index'):
-        print("Model already exists at:", model_path)
-        return
-    epochs = 10
-    batch_size = 512
-    tf.reset_default_graph()
-    with tf.Session() as sess:
-        model = get_model(n_fake_users=N_FAKE_USERS, n_users=n_users, n_movies=n_movies)
-        sess.run(tf.global_variables_initializer())
-        saver = tf.train.Saver()
-        model_p = TFPredictWrapper(model, sess)
-        # training and validation
-        for e in range(epochs):
-            batches = get_batches(train_set, batch_size=batch_size)
-            loses_in_epoch = []
-            for b in batches:
-                u = b[:, 0]
-                i = b[:, 1]
-                r = b[:, 2]
-                _, preds, loss = sess.run([model.train_op, model.prediction, model.loss],
-                                          feed_dict={model.user_inp: u,
-                                                     model.item_inp: i,
-                                                     model.y_true: r})
-                loses_in_epoch.append(np.mean(loss))
-            epoch_loss = np.mean(loses_in_epoch)
-
-            mean_hr, mean_ndcg, time_eval = evaluate_model(model_p, test_set, verbose=0)
-            print('e={} hr={:.3f} ndcg={:.3f} time={:.3f} train_loss={:.3f} '.format(e + 1, mean_hr, mean_ndcg,
-                                                                                     time_eval,
-                                                                                     epoch_loss))
-        save_path = saver.save(sess, model_path)
-
-def predict(n_fake_users, n_users, n_movies, test_set, model_path):
-    tf.reset_default_graph()
-    with tf.Session() as sess:
-        model = get_model(n_fake_users=n_fake_users, n_users=n_users, n_movies=n_movies)
-        saver = tf.train.Saver()
-        saver.restore(sess, model_path)
-        model_p = TFPredictWrapper(model, sess)
-        mean_hr, mean_ndcg, time_eval = evaluate_model(model_p, test_set, verbose=0)
-        print('hr={:.3f} ndcg={:.3f} time={:.3f}'.format(mean_hr, mean_ndcg, time_eval))
-    return mean_hr
 
 def create_attack_input(n_fake_users, n_users, n_movies, train_set, attack_rating_init_prob=0.5):
     """
@@ -165,9 +40,9 @@ def create_attack_input(n_fake_users, n_users, n_movies, train_set, attack_ratin
     attack_ratings_prob = np.full((attack_output_dim,), attack_rating_init_prob)
     # # swap 1 to 0 and 1 to 0 from legitimate training set: #TODO test
     # real_rating = 1 - train_set[2]
-    attack_input = np.array([np.append(attack_users, train_set[0]),
-                             np.append(attack_items, train_set[1]),
-                             np.append(attack_ratings_prob, train_set[2])])
+    attack_input = [np.append(attack_users, train_set[0]),
+                    np.append(attack_items, train_set[1]),
+                    np.append(attack_ratings_prob, train_set[2])]
     real_training_rating_size = len(train_set[2])
     print('attack rating size=', attack_output_dim)
     print('real_training_rating_size=', real_training_rating_size)
@@ -198,16 +73,14 @@ def filter_ratings_by_treshold(attack_users, attack_items, attack_rating_prob, t
     if threshold <= 1:
         attack_df_filterd = base_attack_df[base_attack_df['r'] > threshold]  # apply on rows, keep only high prob ratings
     else:
-        attack_df_filterd = base_attack_df.sort_values('r', ascending=False).head(threshold)
+        # attack_df_filterd = df.groupby('u')['r'].nlargest(threshold)
+        attack_df_filterd = base_attack_df.sort_values('r', ascending=False).groupby('u').head(threshold)
     attack_df_filterd['r'] = 1
-
-    plot_interations(attack_df_filterd, DATASET_NAME, 2, 'Attack')
     print('Amount of total poison after filter:', len(attack_df_filterd))
     return attack_df_filterd, len(attack_df_filterd)
 
 def mix_attack_df_with_training_set(mal_training_set, train_set_subset):
     from Data import concat_and_shuffle
-
     attack_benign_training_set = concat_and_shuffle(mal_training_set, train_set_subset)
     print(f'attack_benign_training_set={len(attack_benign_training_set[0])}, mal_training_set={len(mal_training_set[0])},'
           f' train_set_subset={len(train_set_subset[0])}')
@@ -243,130 +116,79 @@ def add_negative_samples(attack_df_filterd, n_movies, num_negatives):
     mal_training_set = (np.array(user_input), np.array(item_input), np.array(labels))
     return mal_training_set
 
-def generate_fake_ratings(n_fake_users, n_users, n_movies, attack_input, model_path, lamda = 3.5):
-    """
-    performs gradient step in order to get which ratings should be changed to increase the loss
-    :return:
-    """
+
+def generate_fake_ratings_random(model, n_fake_users, n_movies, attack_input):
     output_dim = n_fake_users * n_movies
-    tf.reset_default_graph()
-    mal_real_shape = len(attack_input[0])
-    rating_input = tf.placeholder(tf.float32, [mal_real_shape], name='ratings_prob')
-    model = get_model(n_fake_users=n_fake_users, n_users=n_users, n_movies=n_movies)
-    with tf.Session() as sess:
-        saver = tf.train.Saver()
-        saver.restore(sess, model_path)
+    attack_rating_prob = np.random.rand(output_dim)
+    return attack_rating_prob
 
-        eps_p = tf.placeholder(tf.float32, mal_real_shape) # each mal rating prob will take a eps_s * gradient step
-        mask_p = tf.placeholder(tf.float32, mal_real_shape) # used to mask out legitimate ratings
+def generate_fake_ratings_keras(model, n_fake_users, n_movies, attack_input):
+    """
+       performs gradient step in order to get which ratings should be changed to increase the loss
+       :return:
+       """
+    import keras
+    output_dim = n_fake_users * n_movies
+    user_inp_p = model.inputs[0]
+    item_inp_p = model.inputs[1]
+    out_rating_p = model.outputs[0]
 
-        #TODO check with rint different theta values
-        #TODO: rating starts with value 0.5
-        # -THERA * (tf.reduce_sum(tf.rint(rating_input * mask_p)) / (n_fake_users * n_movies))
-        reg_loss = lamda * (tf.reduce_sum(rating_input * mask_p) / n_fake_users)
-        obj_loss = tf.keras.losses.binary_crossentropy(y_pred=model.prediction, y_true=rating_input)
-        combined_loss = reg_loss + obj_loss
-        grad = tf.gradients(combined_loss, rating_input)  # take the gradient of the loss according to prediction # check
-        rating_input_out = rating_input + (eps_p * grad * mask_p)  # perform a gradient step
-        rating_input_out = tf.reshape(tf.clip_by_value(rating_input_out, 0, 1), (-1,))
-        step = 10000
-        eps = np.full((mal_real_shape,), step)
+    sess = keras.backend.get_session()
 
-        all_users = attack_input[0]
-        all_items = attack_input[1]
-        all_rating = attack_input[2]
-        indexes = np.arange(len(all_users))
-        for i in range(5):
-            
+    rating_p = tf.placeholder(tf.float32, [None, 1], name='ratings_prob')
+    eps_p = tf.placeholder(tf.float32, [None, 1])  # each mal rating prob will take a eps_s * gradient step
+    mask_p = tf.placeholder(tf.float32, [None, 1])  # used to mask out legitimate ratings
+
+    # -THERA * (tf.reduce_sum(tf.rint(rating_input * mask_p)) / (n_fake_users * n_movies))
+    lamda = 0
+    reg_loss = lamda * (tf.reduce_sum(rating_p * mask_p) / n_fake_users)
+    obj_loss = tf.keras.losses.binary_crossentropy(y_pred=out_rating_p, y_true=rating_p)
+    combined_loss = reg_loss + obj_loss
+    grad = tf.gradients(combined_loss, rating_p)  # take the gradient of the loss according to prediction # check
+    rating_input_out = rating_p + (eps_p * grad * mask_p)  # perform a gradient step
+    rating_input_out = tf.reshape(tf.clip_by_value(rating_input_out, 0, 1), (-1,))
+    step = .001
+
+    all_users, all_items, all_rating = attack_input
+    indexes = np.arange(len(attack_input[0]))
+    batch_size = 512
+    batch_rating = None ; b_indexes = None; attack_rating_prob = None
+    adv_l=None; obj_l=None; reg_l=None
+    for i in range(5):
+        # every epoch the values will get updated in attack input, under all_rating column
+
+        for batch in get_batches(attack_input + [indexes], batch_size):
+            b_users, b_items, b_ratings, b_indexes = batch[:, 0], batch[:, 1], batch[:, 2], batch[:, 3].astype(
+                'int')
+            b_size = len(b_users)
+            b_eps = np.full((b_size,), step)
             # mask the gradient such that benign user rating will not be changed
-            mask = np.zeros((mal_real_shape,))
-            mask[np.argwhere(indexes < output_dim)] = 1
+            b_mask = np.zeros((b_size,))
+            b_mask[np.argwhere(b_indexes < output_dim)] = 1
+            batch_rating, adv_l, obj_l, reg_l = sess.run([rating_input_out, combined_loss, obj_loss, reg_loss],
+                                                         feed_dict={user_inp_p: b_users.reshape((-1, 1)),
+                                                                    item_inp_p: b_items.reshape((-1, 1)),
+                                                                    rating_p: b_ratings.reshape((-1, 1)),
+                                                                    mask_p: b_mask.reshape((-1, 1)),
+                                                                    eps_p: b_eps.reshape((-1, 1))})
+            batch_rating = batch_rating.reshape((-1,))
+            np.put(all_rating, b_indexes, batch_rating)
 
-            all_rating, adv_l, obj_l, reg_l= sess.run([rating_input_out, combined_loss, obj_loss, reg_loss],
-                                         feed_dict={model.user_inp: all_users,
-                                                    model.item_inp: all_items,
-                                                    rating_input: all_rating,
-                                                    mask_p: mask,
-                                                    eps_p: eps})
-            all_rating = all_rating.reshape((-1,))
+        attack_rating_prob = all_rating[np.argwhere(indexes < output_dim)][np.arange(output_dim)].reshape(-1, )
+        # Extract attack rating from all rating by taking small index
+        legit_rating = batch_rating[np.argwhere(b_indexes > output_dim)].reshape(-1, )
+        assert len(np.unique(legit_rating)) == 2, 'legit rating must not change during gradient step'
+        above_t = (attack_rating_prob > 0.5).sum()
+        # if np.array_equal(previous_arr, attack_rating_prob > 0.5):
+        #     print('same array...')
+        # previous_arr = attack_rating_prob > 0.5
+        below_t = (attack_rating_prob < 0.5).sum()
+        print(i, np.round(attack_rating_prob[:10], 2), np.mean(attack_rating_prob), below_t, above_t, np.mean(adv_l), np.mean(obj_l),
+              np.mean(reg_l))
+    return attack_rating_prob
 
-            # Extract attack rating from all rating by taking small index
-            attack_rating_prob = all_rating[np.argwhere(indexes < output_dim)][np.arange(output_dim)].reshape(-1, )
-            legit_rating = all_rating[np.argwhere(indexes > output_dim)].reshape(-1, )
-            assert len(np.unique(legit_rating)) == 2, 'legit rating must not change during gradient step'
-            above_t = (attack_rating_prob > 0.5).sum()
-            below_t = (attack_rating_prob < 0.5).sum()
-            print(i, np.round(attack_rating_prob[:10], 2), np.mean(attack_rating_prob), below_t, above_t, adv_l, obj_l, reg_l)
-        return attack_rating_prob
-#
-#
-def train_attack_evalute(N_FAKE_USERS, attack_benign_training_set, test_set, mal_epochs, n_users, n_movies, model_path):
-    # evaluate the model using the fake predictions
-    tf.reset_default_graph()
-    model = get_model(n_fake_users=N_FAKE_USERS, n_users=n_users, n_movies=n_movies)
-    with tf.Session() as sess:
-        model_p = TFPredictWrapper(model, sess)
-        saver = tf.train.Saver()
-        saver.restore(sess, model_path)
-        print('e_loss\tm_hr\tm_ndcg\tt_eval')
-        for e in range(mal_epochs):
-            u = attack_benign_training_set[0]
-            i = attack_benign_training_set[1]
-            r = attack_benign_training_set[2]
-            _, preds, epoch_loss = sess.run([model.train_op, model.prediction, model.loss],
-                                      feed_dict={model.user_inp: u,
-                                                 model.item_inp: i,
-                                                 model.y_true: r})
-
-            mean_hr, mean_ndcg, time_eval = evaluate_model(model_p, test_set, verbose=0)
-            print('{:.3f}\t{:.3f}\t{:.3f}\t{:.3f}'.format(epoch_loss, mean_hr, mean_ndcg, time_eval))
-    return epoch_loss, mean_hr, mean_ndcg
-
-def train_attack_evalute_batches(N_FAKE_USERS, attack_benign_training_set, test_set, batch_size, mal_epochs, n_users,
-                                 n_movies):
-    if len(attack_benign_training_set[0]) < batch_size:
-        return [-1, -1, -1]
-    # evaluate the model using the fake predictions
-    model_path = f"tf_neumf_models/model{n_fake_users}.ckpt"
-    tf.reset_default_graph()
-    model = get_model(n_fake_users=N_FAKE_USERS, n_users=n_users, n_movies=n_movies)
-
-    with tf.Session() as sess:
-        saver = tf.train.Saver()
-        saver.restore(sess, model_path)
-        model_p = TFPredictWrapper(model, sess)
-        print('e_loss\tm_hr\tm_ndcg\tt_eval')
-        for e in range(mal_epochs):
-            batches = get_batches(attack_benign_training_set, batch_size=batch_size)
-            loses_in_epoch = []
-            for b in batches:
-                u = b[:, 0]
-                i = b[:, 1]
-                r = b[:, 2]
-                _, preds, loss = sess.run([model.train_op, model.prediction, model.loss],
-                                          feed_dict={model.user_inp: u,
-                                                     model.item_inp: i,
-                                                     model.y_true: r})
-                loses_in_epoch.append(np.mean(loss))
-            epoch_loss = np.mean(loses_in_epoch)
-            mean_hr, mean_ndcg, time_eval = evaluate_model(model_p, test_set, verbose=0)
-            print('{:.3f}\t{:.3f}\t{:.3f}\t{:.3f}'.format(epoch_loss, mean_hr, mean_ndcg, time_eval))
-    return epoch_loss, mean_hr, mean_ndcg
-
-def train_attack_evalute_keras(N_FAKE_USERS, attack_benign_training_set, test_set, batch_size, mal_epochs):
-    from ga_attack_multiprocess import load_base_model, get_fitness_single
-    model = load_base_model(N_FAKE_USERS, DATASET_NAME)
-    model_base_weights = model.get_weights()
-    # attack_params = {'n_users': n_users, 'test_set': test_set, 'best_base_hr': }
-
-    # attack_df = convert_attack_agent_to_input_df(agent)
-    # malicious_training_set = create_training_instances_malicious(df=attack_df, user_item_matrix=agent.gnome,
-    #                                                              n_users=n_users, num_negatives=4)
-    # logger = logging.getLogger('ga_attack')
-    # n_malicious_examples_include_negatives = len(malicious_training_set[0])
-    # logger.info('#Attack_df={} #Entries in malicious dataset - {} (includes negative_sampling={}), Which is {}% of poison from real dataset'
-    #             .format(len(attack_df), n_malicious_examples_include_negatives, 4, round((n_malicious_examples_include_negatives / len(train_set[0])) * 100, 2)))
-    from Data import concat_and_shuffle
+def train_attack_evalute_keras(model, attack_benign_training_set, test_set, batch_size, mal_epochs):
+    # from ga_attack_multiprocess import load_base_model
     from Evalute import pert_train_evaluate_model
     # attack_benign_training_set = concat_and_shuffle(malicious_training_set, train_set)
     mean_hr, mean_ndcg, time_eval = evaluate_model(model, test_set, verbose=0)
@@ -375,83 +197,121 @@ def train_attack_evalute_keras(N_FAKE_USERS, attack_benign_training_set, test_se
                                                                               test_set,
                                                                               batch_size=batch_size,
                                                                               epochs=mal_epochs,
-                                                                              # pert_model_take_best=PERT_MODEL_TAKE_BEST,
                                                                               verbose=2)
     return 0, best_pert_hr, best_pert_ndcg
 
-def run_expriment(train_set, train_set_subset, n_users, n_movies, test_set, n_fake_users, threshold, lamda, batch):
-    convert_binary = True
-    load_model = False
-    testset_percentage = 0.2
-    model_path = f"tf_neumf_models/model_{DATASET_NAME}_{n_fake_users}.ckpt"
+
+blackbox_poison_dir = "blackbox_poison"
+
+
+def save_attack_benign_training_set(attack_benign_training_set, DATASET_NAME, test_type, train_frac, threshold):
+    file_name = os.path.join(blackbox_poison_dir, f'ds{DATASET_NAME}_type{test_type}_t{train_frac}_t{threshold}.dump')
+    pickle.dump(attack_benign_training_set, open(file_name, 'wb'))
+
+
+def open_attack_benign_training_set(DATASET_NAME, test_type, train_frac, threshold):
+    file_name = os.path.join(blackbox_poison_dir, f'ds{DATASET_NAME}_type{test_type}_t{train_frac}_t{threshold}.dump')
+    attack_benign_training_set = pickle.load(open(file_name, 'rb'))
+    return attack_benign_training_set
+
+def run_experiment(exp_params, global_exp_params):
+    tf.reset_default_graph()
+    train_set_subset = exp_params['train_set_subset']
+    n_fake_users = exp_params['n_fake_users']
+    threshold = exp_params['threshold']
+    test_set = exp_params['test_set']
+    test_type = exp_params['test_type']
+    train_frac = exp_params['train_frac']
+    train_set = global_exp_params['train_set']
+    DATASET_NAME = global_exp_params['DATASET_NAME']
+    CONVERT_BINARY = global_exp_params['CONVERT_BINARY']
+    num_negatives = global_exp_params['num_negatives']
+    MAL_EPOCHS = global_exp_params['MAL_EPOCHS']
+    n_users = global_exp_params['n_users']
+    n_movies = global_exp_params['n_movies']
+    plot = False
+
     print('Started...')
-    # TRAIN
-    train_model(n_fake_users, n_users, n_movies, train_set, test_set, model_path) # creates a model and saves it
+    model, best_hr, best_ndcg = load_base_model(n_fake_users, DATASET_NAME, CONVERT_BINARY)
     #ATTACK
     attack_input, attack_users, attack_items, output_dim = create_attack_input(n_fake_users, n_users, n_movies, train_set)
-    attack_rating_prob = generate_fake_ratings(n_fake_users, n_users, n_movies, attack_input, model_path, lamda=lamda)
+    if test_type == 'random':
+        attack_rating_prob = generate_fake_ratings_random(None, n_fake_users, n_movies, None)
+    else:
+        attack_rating_prob = generate_fake_ratings_keras(model, n_fake_users, n_movies, attack_input)
     attack_df_filtered, poison_amount = filter_ratings_by_treshold(attack_users, attack_items, attack_rating_prob, threshold)
+    if plot:
+        plot_interations(attack_df_filtered, DATASET_NAME, 2, 'Attack')
     # ATTACK EVALUATION
     mal_training_set = add_negative_samples(attack_df_filtered, n_movies, num_negatives)
-    # mal_training_set = ([],[],[])
-    best_hr = predict(n_fake_users, n_users, n_movies, test_set, model_path)
     attack_benign_training_set = mix_attack_df_with_training_set(mal_training_set, train_set_subset)
-    # if not batch:
-    #     epoch_loss, mean_hr, mean_ndcg = train_attack_evalute(n_fake_users, attack_benign_training_set, test_set, MAL_EPOCHS, n_users, n_movies, model_path)
-    # else:
-
-    #     epoch_loss, mean_hr, mean_ndcg = train_attack_evalute_batches(n_fake_users, attack_benign_training_set,
-    #                                                                   test_set, batch_size, MAL_EPOCHS, n_users, n_movies)
+    save_attack_benign_training_set(attack_benign_training_set, DATASET_NAME, test_type, train_frac, threshold)
     batch_size = 512
-    epoch_loss, mean_hr, mean_ndcg = train_attack_evalute_keras(n_fake_users, attack_benign_training_set, test_set, batch_size, MAL_EPOCHS)
-
-    #     print(f'i={i}, mean={mean_hr}')
+    epoch_loss, mean_hr, mean_ndcg = train_attack_evalute_keras(model, attack_benign_training_set, test_set, batch_size, MAL_EPOCHS)
     return mean_hr, mean_ndcg, poison_amount, best_hr - mean_hr
+
 
 
 import pickle
 import pandas as pd
 
-num_negatives = 4  # according to paper.
-MAL_EPOCHS = 3
-batch = True
-# n_fake_user_list = [2, 4, 8, 16, 32, 64, 128]
-# tresholds_list = [0.4, 0.5, 0.6, 0.7, 0.8]
-# n_fake_user_list = [16]
-# TODO: IT seems that the trehshold is much much much more effective than other methods
-# tresholds_list = np.linspace(0.7, 0.9999, 20)
-tresholds_list = np.linspace(10, 10000, 20).astype(int)
-# tresholds_list = [1000]
-# train_frac_list = np.logspace(-4, 0, 10)
-train_frac_list = [0.01]
-# n_fake_user_list = [4, 8, 16, 32, 64]
-lamda_list = [0] # 1/5000
-n_fake_user_list = [16]
-# tresholds_list = [0.4]
-rows = []
-# DATASET_NAME = 'movielens100k'
-DATASET_NAME = 'movielens1m'
-# PREPROCESS
-df = get_from_dataset_name(DATASET_NAME, True)
-data = Data(seed=42)
-train_set, test_set, n_users, n_movies = data.pre_processing(df, test_percent=1)
-plot_interactions_neg(train_set, DATASET_NAME, atleast=2, title='Full Training_set')
-for ii, train_frac in enumerate(train_frac_list):
-    train_set_subset = create_subset(train_set, train_frac=train_frac)
-    for i, n_fake_users in enumerate(n_fake_user_list):
-        for j, threshold in enumerate(tresholds_list):
-            lamda = 0
-            try:
-                mean_hr, mean_ndcg, poison_amount, delta_mean_hr = run_expriment(train_set, train_set_subset, n_users, n_movies,
-                                                                                 test_set, n_fake_users, threshold, lamda, batch)
-                print(f'Finished exp with: train_frac={train_frac:0.4f}, n_fake_users={n_fake_users}, threshold={threshold}, theta={lamda:0.2f} mean_hr= {mean_hr:0.2f} delta_mean_hr={delta_mean_hr:0.3f}')
-                rows.append([train_frac, n_fake_users, threshold, lamda, mean_hr, delta_mean_hr, mean_ndcg, poison_amount])
-            except ValueError:
-                print('could not finish exp with:', n_fake_users, threshold, lamda)
-results = pd.DataFrame(np.array(rows), columns =['train_frac', 'n_fake_users', 'threshold', 'theta', 'mean_hr', 'delta_mean_hr', 'mean_ndcg', 'poison_amount'])
-pd.options.display.max_rows = 1000
-# print(results.sort_values('mean_hr'))
-pickle.dump(results, open(f'out_results_extended_{DATASET_NAME}.pickle', 'wb'))
+
+def main():
+    num_negatives = 4  # according to paper.
+    MAL_EPOCHS = 3
+
+    train_frac_list = [0.00]
+    n_exp_users = 20
+    n_exp_tresholds = 10
+    # n_fake_user_list = [2, 4, 8 , 16, 32, 64, 128, 256]
+    n_fake_user_list = [16]
+    DATASET_NAME = 'movielens100k'
+    test_types = ['grad', 'random']
+    plot = False
+    CONVERT_BINARY = True
+    # test_type = 'grad'
+    # DATASET_NAME = 'movielens1m'
+    # PREPROCESS
+    df = get_from_dataset_name(DATASET_NAME, CONVERT_BINARY)
+    data = Data(seed=42)
+    train_set, test_set, n_users, n_movies = data.pre_processing(df, test_percent=1)
+    tresholds_list = np.linspace(2, n_movies//10, n_exp_tresholds).astype(int)
+    if plot:
+        plot_interactions_neg(train_set, DATASET_NAME, atleast=2, title='Full Training_set')
+
+    for ii, train_frac in enumerate(train_frac_list):
+        train_set_subset = create_subset(train_set, train_frac, DATASET_NAME, Constants.unique_subset_id)
+        global_exp_params = {
+            'train_set': train_set,
+            'DATASET_NAME': DATASET_NAME,
+            'CONVERT_BINARY': CONVERT_BINARY,
+            'num_negatives': num_negatives,
+            'MAL_EPOCHS': MAL_EPOCHS,
+            'n_users': n_users,
+            'n_movies': n_movies,
+        }
+        for test_type in test_types:
+            rows = []
+            for i, n_fake_users in enumerate(n_fake_user_list):
+                for j, threshold in enumerate(tresholds_list):
+                    exp_params = {
+                        'train_set_subset': train_set_subset,
+                        'n_fake_users': n_fake_users,
+                        'threshold': threshold,
+                        'test_set': test_set,
+                        'test_type': test_type,
+                        'train_frac': train_frac
+                    }
+                    mean_hr, mean_ndcg, poison_amount, delta_mean_hr = run_experiment(exp_params, global_exp_params)
+                    print(f'Finished exp with: train_frac={train_frac:0.4f}, n_fake_users={n_fake_users}, threshold={threshold}, mean_hr= {mean_hr:0.2f} delta_mean_hr={delta_mean_hr:0.3f}')
+                    rows.append([train_frac, n_fake_users, threshold, mean_hr, delta_mean_hr, mean_ndcg, poison_amount])
+            results = pd.DataFrame(np.array(rows),
+                                   columns=['train_frac', 'n_fake_users', 'threshold', 'mean_hr', 'delta_mean_hr',
+                                            'mean_ndcg', 'poison_amount'])
+            pickle.dump(results, open(f'out_results__{DATASET_NAME}_ALL_keras_{test_type}.pickle', 'wb'))
+
+# pd.options.display.max_rows = 1000
+
 
 
 # attack_params = {'n_fake_users': n_fake_users,
@@ -460,3 +320,6 @@ pickle.dump(results, open(f'out_results_extended_{DATASET_NAME}.pickle', 'wb'))
 #                      'train_frac': train_frac,
 #                      'testset_percentage': testset_percentage,
 #     }
+
+if __name__ == '__main__':
+    main()

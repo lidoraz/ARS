@@ -1,40 +1,56 @@
+import Constants
 import os
-# from Constants import SEED
-from NeuMF import get_model
-from Evalute import baseline_train_evalute_model
-from Data import *
+from Data import get_train_test_set
 import json
 
-os.environ['RUN_MODE'] = '4'
-os.environ['KMP_DUPLICATE_LIB_OK'] = 'True'
-os.environ['KMP_WARNINGS'] = '0'
-os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
-
-ml1m = 'movielens1m'
-ml100k = 'movielens100k'
-
-BASE_MODEL_DIR = 'base_models'
-
-# np.random.seed(SEED)
+from Evalute import baseline_train_evalute_model
 
 
-# Dataset Related
-CONVERT_BINARY = True
-# DATASET_NAME = ml100k
-# DATASET_NAME = ml1m
-TEST_SET_PERCENTAGE = 1
-BASE_MODEL_EPOCHS = 15  # will get the best model out of these n epochs.
+def get_weights(n_fake_users, DATASET_NAME):
+    import json
+    params_name = f'NeuMF_{DATASET_NAME}_u={n_fake_users}_e={Constants.BASE_MODEL_EPOCHS}'
+    model_path = f'{Constants.BASE_MODEL_DIR}/{params_name}.json'
+    metrics_path = f'{Constants.BASE_MODEL_DIR}/{params_name}_metrics.json'
+    weights_path = f'{Constants.BASE_MODEL_DIR}/{params_name}_w.h5'
 
-VERBOSE = 1  # Verbose: 2 - print all in addition to iteration for each agent.
+    assert os.path.exists(model_path), f'Model does not exists at: {model_path}'
+    with open(metrics_path, 'r') as metrics_file:
+        # model = load_base_model(n_fake_users)
+        metrics = json.load(metrics_file)
+        best_hr = metrics['best_hr']
+        best_ndcg = metrics['best_ndcg']
+    return weights_path, best_hr, best_ndcg
 
 
-def train_base_model(n_fake_users=16, DATASET_NAME=ml100k):
+def load_base_model(n_fake_users, DATASET_NAME, convert_binary):
+    import json
+    from keras.models import model_from_json
+    params_name = f'NeuMF_{DATASET_NAME}_u={n_fake_users}_e={Constants.BASE_MODEL_EPOCHS}'
+    model_path = f'{Constants.BASE_MODEL_DIR}/{params_name}.json'
+    metrics_path = f'{Constants.BASE_MODEL_DIR}/{params_name}_metrics.json'
+    weights_path = f'{Constants.BASE_MODEL_DIR}/{params_name}_w.h5'
+    if not os.path.exists(model_path):
+        print('Keras model does not exists, training....')
+        train_base_model(n_fake_users, DATASET_NAME, convert_binary)
+
+    with open(model_path, 'r') as json_file:
+        loaded_model_json = json_file.read()
+    with open(metrics_path, 'r') as metrics_file:
+        # model = load_base_model(n_fake_users)
+        metrics = json.load(metrics_file)
+        best_hr = metrics['best_hr']
+        best_ndcg = metrics['best_ndcg']
+    model = model_from_json(loaded_model_json)
+    model.load_weights(weights_path)
+    from keras.optimizers import Adam
+    model.compile(optimizer=Adam(lr=0.001), loss='binary_crossentropy')
+    return model, best_hr, best_ndcg
+
+def train_base_model(n_fake_users, DATASET_NAME, CONVERT_BINARY):
     """
     this should be the best model according to the evalute process, in terms of HR and NDCG
     """
-    df = get_from_dataset_name(DATASET_NAME, CONVERT_BINARY)
-    data = Data(seed=42)
-    train_set, test_set, n_users, n_movies = data.pre_processing(df, test_percent=TEST_SET_PERCENTAGE)
+    train_set, test_set, n_users, n_movies = get_train_test_set(DATASET_NAME, CONVERT_BINARY, Constants.SEED)
     n_users_w_mal = n_users + n_fake_users + 1
 
     # NeuMF Parameters
@@ -46,19 +62,20 @@ def train_base_model(n_fake_users=16, DATASET_NAME=ml100k):
     batch_size = 512
     loss_func = 'binary_crossentropy'
 
-    params_name = f'NeuMF_{DATASET_NAME}_u={n_fake_users}_e={BASE_MODEL_EPOCHS}'
-    model_path = f'{BASE_MODEL_DIR}/{params_name}.json'
-    metrics_path = f'{BASE_MODEL_DIR}/{params_name}_metrics.json'
-    weights_path = f'{BASE_MODEL_DIR}/{params_name}_w.h5'
+    params_name = f'NeuMF_{DATASET_NAME}_u={n_fake_users}_e={Constants.BASE_MODEL_EPOCHS}'
+    model_path = f'{Constants.BASE_MODEL_DIR}/{params_name}.json'
+    metrics_path = f'{Constants.BASE_MODEL_DIR}/{params_name}_metrics.json'
+    weights_path = f'{Constants.BASE_MODEL_DIR}/{params_name}_w.h5'
     if not os.path.exists(model_path):
         print(model_path, 'does not exists.. creating a baseline model')
         print('REGULAR PHASE')
+        from Models.NeuMF import get_model
         model = get_model(n_users_w_mal, n_movies, mf_dim, layers, reg_layers, reg_mf)
         from keras.optimizers import Adam
         model.compile(optimizer=Adam(lr=learning_rate), loss=loss_func)
         print('get_model done')
         model_base, best_hr, best_ndcg = baseline_train_evalute_model(model, train_set, test_set, batch_size=batch_size,
-                                                                      epochs=BASE_MODEL_EPOCHS)
+                                                                      epochs=Constants.BASE_MODEL_EPOCHS)
         print('baseline_train_evalute_model done best_hr = {}'.format(best_hr))
         model_json = model_base.to_json()
         model_base.save_weights(weights_path)
@@ -66,7 +83,7 @@ def train_base_model(n_fake_users=16, DATASET_NAME=ml100k):
             json_file.write(model_json)
         with open(metrics_path, 'w') as metrics_file:
             json.dump({'best_hr': best_hr, 'best_ndcg': best_ndcg}, metrics_file)
-        print('Saved model and weights at dir:', BASE_MODEL_DIR)
+        print('Saved model and weights at dir:', Constants.BASE_MODEL_DIR)
     else:
         print('model exists!')
 

@@ -4,8 +4,10 @@ import os
 mode = 4
 path_prefix = ""
 print("Dataset path - Running mode:", mode)
-
-
+BASE_MODEL_DIR = 'base_models'
+BASE_MODEL_EPOCHS = 15
+MODEL_P_EPOCHS = 3
+unique_subset_id = 42 # crucial for comparing ga and gradient attack
 
 if mode == 0: # default pc work
     path_prefix = 'E:/DEEP_LEARNING/DATA_SETS/'

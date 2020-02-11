@@ -16,14 +16,15 @@ class FitnessProcessPool:
     @staticmethod
     def process_function(in_agents_queue: Queue, out_fitness_queue, process_status, attack_params):
         logger.info(f'pp={os.getppid()} has started process... p={os.getpid()}')
-        from ga_attack_multiprocess import load_base_model, get_fitness_single
+        from ga_attack_train_baseline import load_base_model
+        from ga_attack_multiprocess import get_fitness_single
         pid = os.getpid()
         import tensorflow as tf
+        import Constants
         tf.logging.set_verbosity(tf.logging.ERROR)
-        global DATASET_NAME
-        model = load_base_model(attack_params['n_fake_users'], DATASET_NAME)
+        model, _, _ = load_base_model(attack_params['n_fake_users'], attack_params['dataset_name'], convert_binary=attack_params['convert_binary'])
         model_base_weights = model.get_weights()
-
+        import numpy as np
         while True:
             try:
                 idx, agent, train_set = in_agents_queue.get(block=True)  # block on lock, wait for data
@@ -52,7 +53,6 @@ class FitnessProcessPool:
         signal.signal(signal.SIGALRM, self.receive_signal_stop)
         signal.signal(signal.SIGUSR1, self.receive_signal_add_process)
         signal.signal(signal.SIGUSR2, self.receive_signal_remove_process)
-    #
 
     def add_start_process(self):
         p = Process(target=self.process_function,
@@ -62,12 +62,17 @@ class FitnessProcessPool:
         p.start()
 
     def fitness(self, agents, training_set):
+        n_in_queue = 0
         for idx, agent in enumerate(agents):  # put data in queue for each process
-            self.in_agents_queue.put((idx, agent, training_set))
+            if not agent.evaluted:
+                self.in_agents_queue.put((idx, agent, training_set))
+                n_in_queue += 1
+        logger.info(f'fitness:  n_in_queue={n_in_queue}')
 
-        for i in range(len(agents)):  # wait on queue for a fitness result
+        for i in range(n_in_queue):  # wait on queue for a fitness result
             idx, agent_fitness = self.out_fitness_queue.get(block=True)
             agents[idx].fitness = agent_fitness
+            agents[idx].evaluted = True
 
         while self.to_terminate_process_count > 0:
             self.processes[0].terminate()
@@ -85,6 +90,7 @@ class FitnessProcessPool:
             p.join()
             logger.info('Process id: {}/{} finished'.format(idx + 1, len(self.processes)))
         logger.info('terminate finished successfully')
+        from sys import exit
         exit(0)
 
     def receive_signal_stop(self, signalNumber, frame):

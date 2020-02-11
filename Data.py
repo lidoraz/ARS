@@ -6,15 +6,21 @@ import numpy as np
 from tqdm import tqdm
 import pickle
 
+import Constants
+
 """
 This class takes the loaded movie_lens DataFrame and generates:
 * Training set
 * Test Set
 * Utility functions user_id / movie_id to index
 """
-#
-# from Constants import SEED
-# np.random.seed(SEED)
+
+
+def get_train_test_set(DATASET_NAME, CONVERT_BINARY, TEST_SET_PERCENTAGE=1.0):
+    df = get_from_dataset_name(DATASET_NAME, CONVERT_BINARY)
+    data = Data(seed=Constants.SEED)
+    train_set, test_set, n_users, n_movies = data.pre_processing(df, test_percent=TEST_SET_PERCENTAGE)
+    return train_set, test_set, n_users, n_movies
 
 def create_training_instances_malicious(df,  user_item_matrix, n_users, num_negatives= 4):
     # for each of the attack df entries, sample #num_negative items and create a mal_training_set
@@ -34,20 +40,32 @@ def create_training_instances_malicious(df,  user_item_matrix, n_users, num_nega
     training_set = (np.array(user_input) + n_users, np.array(item_input), np.array(labels))
     return training_set
 
-def create_subset(train_set, train_frac = 1.0):
+def load_training_subset(dataset_name, train_frac, unique_id):
+    path = f'training_subsets/{dataset_name}_{train_frac}_{unique_id}'
+    subset = pickle.load(open(path, 'rb'))
+    return subset
+
+def create_subset(train_set, train_frac, dataset_name, unique_id):
     """
     Samples a subset from training set with provided frac
     :param train_set:
     :param train_frac:
     :return:
     """
+    path = f'training_subsets/{dataset_name}_{train_frac}_{unique_id}'
+    if os.path.exists(path):
+        print(f'Subset already exists with: dataset_name={dataset_name}, unique_id={unique_id}.. loading it from cache')
+        return load_training_subset(dataset_name, train_frac, unique_id)
     train_set_len = len(train_set[0])
     n_train_set_items = int(train_set_len * train_frac)
     indexes = np.random.choice(np.arange(train_set_len), n_train_set_items, replace=False)
     subset = (train_set[0][indexes],
               train_set[1][indexes],
               train_set[2][indexes])
+    pickle.dump(subset, open(path, 'wb'))
     return subset
+
+
 def concat_and_shuffle(malicious_training_set, train_set):
     attack_benign_training_set = (np.concatenate([malicious_training_set[0], train_set[0]]),
                                   np.concatenate([malicious_training_set[1], train_set[1]]),
@@ -72,7 +90,7 @@ class Data():
     def __init__(self, negative_set_size=99, seed=None):
         if not (seed is None):
             self.seed = seed
-            np.random.seed(seed)
+            np.random.seed(Constants.SEED)
         self.negative_set_size = negative_set_size
         self.most_recent_entries = None
         self._userid2idx = None
@@ -183,8 +201,6 @@ class Data():
             test_set[user_id] = sampled_indexes + [rated_item_list[i]]
         # will be picked up randomly:
         return test_set
-    # def create_negatives(self, user_id, user_item_matrix, seed):
-    #     pass
 
     """
     This function creates negative examples given a user name from a data frame
@@ -221,7 +237,7 @@ def create_datasets():
                   get_movielens1m(convert_binary=True),
                   get_movielens100k(convert_binary=True)]
     for df in dataframes:
-        data = Data(seed=42)
+        data = Data(seed=Constants.SEED)
         t0 = time()
         training_set, test_set, n_users, n_movies = data.pre_processing(df, test_percent=1, train_precent=1)
         print(f'data.pre_processing done. T:{time() - t0}')
@@ -230,7 +246,7 @@ def create_datasets():
 
 def test_Data_pre_processing_dataset():
     df = get_movielens100k(convert_binary=False)
-    data = Data(seed=42)
+    data = Data(seed=Constants.SEED)
     t0 = time()
     training_set, test_set, n_users, n_movies = data.pre_processing(df, test_percent=1, train_precent=1)
     print(f'data.pre_processing done. T:{time() - t0}')

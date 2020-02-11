@@ -1,17 +1,17 @@
 import os
 import resource
-import multiprocessing
+
 os.environ['RUN_MODE'] = '4'
 os.environ['KMP_DUPLICATE_LIB_OK'] = 'True'
 os.environ['KMP_WARNINGS'] = '0'
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 
 from keras import backend as K
-from NeuMF import get_model
+from Models.NeuMF import get_model
 from keras.optimizers import Adam
 
 from ga import FakeUserGeneticAlgorithm
-from Evalute import baseline_train_evalute_model, pert_train_evaluate_model, plot
+from Evalute import baseline_train_evalute_model, pert_train_evaluate_model
 from Data import *
 
 import tensorflow as tf
@@ -114,9 +114,6 @@ def train_base_model(n_fake_users):
             best_hr = metrics['best_hr']
             best_ndcg = metrics['best_ndcg']
     return model, weights_path, train_set, test_set, n_users, n_movies, best_hr, best_ndcg
-
-
-from keras.models import load_model
 
 
 def load_base_model(n_fake_users, name="default_model"):
