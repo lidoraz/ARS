@@ -22,7 +22,8 @@ class FitnessProcessPool:
         import tensorflow as tf
         import Constants
         tf.logging.set_verbosity(tf.logging.ERROR)
-        model, _, _ = load_base_model(attack_params['n_fake_users'], attack_params['dataset_name'], convert_binary=attack_params['convert_binary'])
+        model_name = 'NeuMF'
+        model, _, _ = load_base_model(attack_params['n_fake_users'], attack_params['dataset_name'], attack_params['convert_binary'], model_name)
         model_base_weights = model.get_weights()
         import numpy as np
         while True:
@@ -67,7 +68,6 @@ class FitnessProcessPool:
             if not agent.evaluted:
                 self.in_agents_queue.put((idx, agent, training_set))
                 n_in_queue += 1
-        logger.info(f'fitness:  n_in_queue={n_in_queue}')
 
         for i in range(n_in_queue):  # wait on queue for a fitness result
             idx, agent_fitness = self.out_fitness_queue.get(block=True)

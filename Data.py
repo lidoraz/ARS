@@ -192,7 +192,7 @@ class Data():
     """
     def _create_testset(self, df, most_recent_entries, percent=1.0):
         # select one most recent entry from each user, this will be the test
-        most_recent_entries = most_recent_entries.sample(frac=percent)
+        # most_recent_entries = most_recent_entries.sample(frac=percent)
         users_list = most_recent_entries['user_id'].values
         rated_item_list = most_recent_entries['movie_id'].values
         test_set = {}

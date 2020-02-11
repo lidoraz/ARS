@@ -19,7 +19,7 @@ The best NeuMF model is saved to Pretrain/ml-1m_NeuMF_8_[64,32,16,8]_1571230994.
 '''
 from Constants import SEED
 
-def get_model(num_users, num_items, mf_dim=10, layers=[10], reg_layers=[0], reg_mf=0):
+def get_model(num_users, num_items, mf_dim=10, layers=[10], reg_layers=[0], reg_mf=0,  learning_rate=.001, loss_func='binary_crossentropy'):
     import keras
     from keras import initializers
     from keras.regularizers import l1, l2
@@ -30,8 +30,8 @@ def get_model(num_users, num_items, mf_dim=10, layers=[10], reg_layers=[0], reg_
     assert len(layers) == len(reg_layers)
     num_layer = len(layers) #Number of layers in the MLP
     # Input variables
-    user_input = Input(shape=(1,), dtype='int32', name = 'user_input')
-    item_input = Input(shape=(1,), dtype='int32', name = 'item_input')
+    user_input = Input(shape=(1,), dtype='int32', name='user_input')
+    item_input = Input(shape=(1,), dtype='int32', name='item_input')
     
     # Embedding layer
     MF_Embedding_User = Embedding(input_dim = num_users, output_dim = mf_dim, name = 'mf_embedding_user',
@@ -71,5 +71,6 @@ def get_model(num_users, num_items, mf_dim=10, layers=[10], reg_layers=[0], reg_
     
     model = Model(inputs=[user_input, item_input], 
                   outputs=[prediction])
-    
+    from keras.optimizers import Adam
+    model.compile(optimizer=Adam(lr=learning_rate), loss=loss_func)
     return model

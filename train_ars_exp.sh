@@ -5,8 +5,10 @@
 python -u ga_attack_train_baseline.py --n_fake_users=2 &
 python -u ga_attack_train_baseline.py --n_fake_users=4  &
 python -u ga_attack_train_baseline.py --n_fake_users=8  &
+python -u ga_attack_train_baseline.py --n_fake_users=12  &
 python -u ga_attack_train_baseline.py --n_fake_users=16  &
 python -u ga_attack_train_baseline.py --n_fake_users=32  &
+python -u ga_attack_train_baseline.py --n_fake_users=52  &
 python -u ga_attack_train_baseline.py --n_fake_users=64  &
 python -u ga_attack_train_baseline.py --n_fake_users=128 &
 #python -u ga_attack_train_baseline.py --n_fake_users=256 &

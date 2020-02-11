@@ -56,13 +56,13 @@ class SimpleCF:
         movie_embedding = Embedding(n_movies, n_latent_factors, name='movie_embedding')(movie_input)
         movie_vec = Flatten(name='FlattenMovies')(movie_embedding)
         sim = dot([user_vec, movie_vec], name='Simalarity-Dot-Product', axes=1)
-        sim = sigmoid(sim)
+        # sim = sigmoid(sim)
         model = Model([user_input, movie_input], sim)
 
         print('model has been set')
         print(model.summary())
-        model.compile(optimizer=Adam(lr=1e-4), loss='binary_crossentropy')
-        # model.compile(optimizer=Adam(lr=1e-4), loss='mse')
+        # model.compile(optimizer=Adam(lr=1e-4), loss='binary_crossentropy')
+        model.compile(optimizer=Adam(lr=1e-4), loss='mse')
         return model
 
     # def fit(self, x, y, batch_size=512, epochs=25, verbose=0):

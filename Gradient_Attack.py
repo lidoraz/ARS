@@ -143,6 +143,7 @@ def generate_fake_ratings_keras(model, n_fake_users, n_movies, attack_input):
     lamda = 0
     reg_loss = lamda * (tf.reduce_sum(rating_p * mask_p) / n_fake_users)
     obj_loss = tf.keras.losses.binary_crossentropy(y_pred=out_rating_p, y_true=rating_p)
+    # obj_loss = tf.keras.losses.mse(y_pred=out_rating_p, y_true=rating_p)
     combined_loss = reg_loss + obj_loss
     grad = tf.gradients(combined_loss, rating_p)  # take the gradient of the loss according to prediction # check
     rating_input_out = rating_p + (eps_p * grad * mask_p)  # perform a gradient step
@@ -230,9 +231,9 @@ def run_experiment(exp_params, global_exp_params):
     n_users = global_exp_params['n_users']
     n_movies = global_exp_params['n_movies']
     plot = False
-
+    model_name = global_exp_params['model_name']
     print('Started...')
-    model, best_hr, best_ndcg = load_base_model(n_fake_users, DATASET_NAME, CONVERT_BINARY)
+    model, best_hr, best_ndcg = load_base_model(n_fake_users, DATASET_NAME, CONVERT_BINARY, model_name=model_name)
     #ATTACK
     attack_input, attack_users, attack_items, output_dim = create_attack_input(n_fake_users, n_users, n_movies, train_set)
     if test_type == 'random':
@@ -260,13 +261,15 @@ def main():
     num_negatives = 4  # according to paper.
     MAL_EPOCHS = 3
 
-    train_frac_list = [0.00]
+    train_frac_list = [0.01]
     n_exp_users = 20
     n_exp_tresholds = 10
     # n_fake_user_list = [2, 4, 8 , 16, 32, 64, 128, 256]
     n_fake_user_list = [16]
     DATASET_NAME = 'movielens100k'
-    test_types = ['grad', 'random']
+    # test_types = ['grad', 'random']
+    test_types = ['random']
+    model_name = 'simple_cf'
     plot = False
     CONVERT_BINARY = True
     # test_type = 'grad'
@@ -275,7 +278,9 @@ def main():
     df = get_from_dataset_name(DATASET_NAME, CONVERT_BINARY)
     data = Data(seed=42)
     train_set, test_set, n_users, n_movies = data.pre_processing(df, test_percent=1)
-    tresholds_list = np.linspace(2, n_movies//10, n_exp_tresholds).astype(int)
+    # tresholds_list = np.linspace(2, n_movies//10, n_exp_tresholds).astype(int)
+    tresholds_list = [500] # cant be larger than n_movies
+
     if plot:
         plot_interactions_neg(train_set, DATASET_NAME, atleast=2, title='Full Training_set')
 
@@ -289,6 +294,7 @@ def main():
             'MAL_EPOCHS': MAL_EPOCHS,
             'n_users': n_users,
             'n_movies': n_movies,
+            'model_name': model_name
         }
         for test_type in test_types:
             rows = []

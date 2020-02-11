@@ -25,7 +25,7 @@ np.random.seed(SEED)
 
 
 def baseline_train_evalute_model(model, train_set, test_set, batch_size=512, epochs=5):
-    from keras.models import clone_model
+    from tensorflow.keras.models import clone_model
     best_hr = 0
     best_ndcg = 0
     best_epoch = 0
