@@ -2,7 +2,7 @@ import numpy as np
 import pandas as pd
 
 
-from tensorflow.keras.layers import Input, Embedding, Flatten
+from tensorflow.keras.layers import Input, Embedding, Flatten, Dense
 from tensorflow.keras import regularizers
 from tensorflow.keras.activations import sigmoid
 from tensorflow.keras.layers import dot
@@ -52,10 +52,13 @@ class SimpleCF:
         user_input = Input(shape=(None,), name='user_input', dtype='int64')
         user_embedding = Embedding(n_users, n_latent_factors, name='user_embedding')(user_input)
         user_vec = Flatten(name='FlattenUsers')(user_embedding)
+        # d1 = Dense(64, activation='relu')(user_vec)
         movie_input = Input(shape=(None,), name='movie_input', dtype='int64')
         movie_embedding = Embedding(n_movies, n_latent_factors, name='movie_embedding')(movie_input)
         movie_vec = Flatten(name='FlattenMovies')(movie_embedding)
+        # d2 = Dense(64, activation='relu')(movie_vec)
         sim = dot([user_vec, movie_vec], name='Simalarity-Dot-Product', axes=1)
+        # sim = dot([d1, d2], name='Simalarity-Dot-Product', axes=1)
         # sim = sigmoid(sim)
         model = Model([user_input, movie_input], sim)
 
@@ -121,18 +124,19 @@ def main():
     t0 = time()
     training_set, test_set, n_users, n_movies = data.pre_processing(df, test_percent=0.5, train_precent=1)
 
-    low_rank_cf_model = SimpleCF()
+    # low_rank_cf_model = SimpleCF()
 
     best_hr=0
     best_ndcg = 0
-    low_rank_cf_model.get_model(n_users, n_movies, n_latent_factors=128)
+    low_rank_cf_model = SimpleCF.get_model(n_users, n_movies, n_latent_factors=128)
     t0 = time()
     mean_hr, mean_ndcg, time_eval = evaluate_model(low_rank_cf_model, test_set)
     print('Init: HR = %.4f, NDCG = %.4f, Eval:[%.1f s]'
           % (mean_hr, mean_ndcg, time()-t0 ))
     for epoch in range(epochs):
         t1 = time()
-        loss = low_rank_cf_model.fit_once(training_set, batch_size=128, verbose=0)
+        loss = low_rank_cf_model.fit(training_set, batch_size=128, verbose=0).history['loss'][0]
+
         t2 = time()
         mean_hr, mean_ndcg, time_eval = evaluate_model(low_rank_cf_model, test_set)
         t3 = time()
@@ -141,8 +145,8 @@ def main():
         if mean_hr > best_hr and mean_ndcg > best_ndcg:
             best_hr = mean_hr
             best_ndcg = mean_ndcg
-            if save_model:
-                low_rank_cf_model.save_model()
+            # if save_model:
+            #     low_rank_cf_model.save_model()
     print('Total time: [%.1f s]' % (time()- t0))
 
 

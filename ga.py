@@ -96,10 +96,13 @@ class FakeUserGeneticAlgorithm:
 
     def selection_roulette(self, agents):
         sum_fitness = sum(list(map(lambda x: x.fitness, agents)))  # work around for negative probabilities
-        for agent in agents:
-            assert agent.fitness >= 0, "Fitness cannot be negative"
-            agent.fitness_norm = agent.fitness / sum_fitness
-        self.__fitness_norm_list = np.array(list(map(lambda x: x.fitness_norm, agents)))
+        if sum_fitness != 0:
+            for agent in agents:
+                assert agent.fitness >= 0, "Fitness cannot be negative"
+                agent.fitness_norm = (agent.fitness) / (sum_fitness)
+            self.__fitness_norm_list = np.array(list(map(lambda x: x.fitness_norm, agents)))
+        else:
+            self.__fitness_norm_list = np.full(len(agents), 1/len(agents))
         return agents
 
     def selection_tournament(self, agents):
@@ -308,6 +311,12 @@ class FakeUserGeneticAlgorithm:
         logger.info(output_log)
         print(output_log)
         return found_new_best
+
+    @staticmethod
+    def get_best_agent(agents):
+        sorted(agents, key=lambda x: x.fitness, reverse=True)
+        return agents[0].fitness, agents[0].delta_ndcg
+
 
     def print_stats(self, agents, n_created, cur_generation):
         # Gather all the fitnesses in one list and print the stats

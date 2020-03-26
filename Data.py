@@ -19,8 +19,9 @@ This class takes the loaded movie_lens DataFrame and generates:
 def get_train_test_set(DATASET_NAME, CONVERT_BINARY, TEST_SET_PERCENTAGE=1.0):
     df = get_from_dataset_name(DATASET_NAME, CONVERT_BINARY)
     data = Data(seed=Constants.SEED)
+
     train_set, test_set, n_users, n_movies = data.pre_processing(df, test_percent=TEST_SET_PERCENTAGE)
-    return train_set, test_set, n_users, n_movies
+    return train_set, test_set, n_users, n_movies ,data.user_item_matrix_reindexed
 
 def create_training_instances_malicious(df,  user_item_matrix, n_users, num_negatives= 4):
     # for each of the attack df entries, sample #num_negative items and create a mal_training_set
@@ -165,7 +166,7 @@ class Data():
         self.n_users = df_reindexed['user_id'].max() + 1
         self.n_movies = df_reindexed['movie_id'].max() + 1
         print('n_real_users:', self.n_users, 'n_movies:', self.n_movies)
-
+        # np.std(np.sum(self.user_item_matrix_reindexed.values, 1) / 3706)
         self.user_item_matrix_reindexed = pd.pivot_table(data=df_reindexed, values='rating', index='user_id', columns='movie_id').fillna(0)
         df_reindexed_removed_recents, most_recent_entries = self._filter_trainset(df_reindexed)
         training_set = self.get_train_instances(df_reindexed_removed_recents, num_negatives=4, percent=train_precent)

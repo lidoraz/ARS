@@ -3,24 +3,24 @@
 # sets priority of 10, where default is zero, non-urgent will have positivetmux number, which means, these processes are nice!
 
 
-ds = 'movielens100k'
-#n_p = 8
+ds='movielens1m'
+n_p=12
 
-#nohup nice -10 python ga_attack_multiprocess.py --n_processes=8 --n_fake_users=2 --selection='TOURNAMENT'  --pop_size=700 --max_pop_size=0 --n_generations=100 --train_frac=0.01 &
-#nohup nice -10 python ga_attack_multiprocess.py --dataset=$ds --n_processes=8 --n_fake_users=4 --selection='TOURNAMENT'  --pop_size=1000  --n_generations=70 --train_frac=0.01 &
-nohup nice -10 python ga_attack_multiprocess.py  --n_processes=8 --n_fake_users=8 --selection='TOURNAMENT'  --pop_size=1000  --n_generations=70 --train_frac=0.01 &
-nohup nice -10 python ga_attack_multiprocess.py  --n_processes=8 --n_fake_users=16 --selection='TOURNAMENT' --pop_size=1000  --n_generations=70 --train_frac=0.01 &
-nohup nice -10 python ga_attack_multiprocess.py   --n_processes=8 --n_fake_users=32 --selection='TOURNAMENT' --pop_size=1000  --n_generations=70 --train_frac=0.01 &
-#nohup nice -10 python ga_attack_multiprocess.py   --n_processes=8 --n_fake_users=52 --selection='TOURNAMENT' --pop_size=1000  --n_generations=70 --train_frac=0.01 &
-nohup nice -10 python ga_attack_multiprocess.py  --n_processes=8 --n_fake_users=64 --selection='TOURNAMENT' --pop_size=1000  --n_generations=70 --train_frac=0.01 &
-nohup nice -10 python ga_attack_multiprocess.py  --n_processes=8 --n_fake_users=128 --selection='TOURNAMENT' --pop_size=1000  --n_generations=70 --train_frac=0.01 &
+#nohup nice -10 python ga_attack_multiprocess.py --dataset='movielens1m' --n_processes=12 --n_fake_users=8 --selection='TOURNAMENT'  --pop_size=1000  --n_generations=70 --train_frac=0.01 &
+nohup nice -10 python ga_attack_multiprocess.py --dataset='movielens1m' --n_processes=12 --n_fake_users=16 --selection='TOURNAMENT' --pop_size=1000  --n_generations=70 --train_frac=0.01 &
+nohup nice -10 python ga_attack_multiprocess.py --dataset='movielens1m'  --n_processes=12 --n_fake_users=32 --selection='TOURNAMENT' --pop_size=1000  --n_generations=70 --train_frac=0.01 &
+#nohup nice -10 python ga_attack_multiprocess.py --dataset='movielens1m'  --n_processes=12 --n_fake_users=52 --selection='TOURNAMENT' --pop_size=1000  --n_generations=70 --train_frac=0.01 &
+nohup nice -10 python ga_attack_multiprocess.py --dataset='movielens1m' --n_processes=12 --n_fake_users=64 --selection='TOURNAMENT' --pop_size=1000  --n_generations=70 --train_frac=0.01 &
+nohup nice -10 python ga_attack_multiprocess.py --dataset='movielens1m' --n_processes=12 --n_fake_users=128 --selection='TOURNAMENT' --pop_size=1000  --n_generations=70 --train_frac=0.01 &
+
+
 #nohup nice -10 python ga_attack_multiprocess.py --n_processes=8 --n_fake_users=2  --selection='ROULETTE'  --pop_size=1000 --n_generations=100 --train_frac=0.01 &
 #nohup nice -10 python ga_attack_multiprocess.py --n_processes=8 --n_fake_users=4  --selection='ROULETTE'  --pop_size=1000 --n_generations=70 --train_frac=0.01 &
 #nohup nice -10 python ga_attack_multiprocess.py --n_processes=8 --n_fake_users=8  --selection='ROULETTE'  --pop_size=1000 --n_generations=70 --train_frac=0.01 &
 #nohup nice -10 python ga_attack_multiprocess.py --n_processes=8 --n_fake_users=16 --selection='ROULETTE' --pop_size=1000  --n_generations=70 --train_frac=0.01 &
 #nohup nice -10 python ga_attack_multiprocess.py --n_processes=8 --n_fake_users=32  --selection='ROULETTE'  --pop_size=1000 --n_generations=100 --train_frac=0.01 &
 
-nohup nice -10 python ga_attack_multiprocess.py   --n_processes=1 --n_fake_users=32 --selection='TOURNAMENT' --pop_size=1000  --n_generations=70 --train_frac=0.01 &
+
 # עדיין צריך להריץ את הריצות האלה הרנדומליות, ואז ברגע שמסיימים איתן, ניתן יהיה להריץ את כל התהליף הזה עם כל היוזרים.
 #nohup nice -15 python ga_attack_multiprocess.py --n_processes=4 --n_fake_users=2  --selection='RANDOM'  --pop_size=1000 --n_generations=100  --train_frac=0.01 &
 #nohup nice -15 python ga_attack_multiprocess.py --n_processes=8 --pos_ratio=0.5 --n_fake_users=4  --selection='RANDOM'  --pop_size=1000 --n_generations=200  --train_frac=0.01 &

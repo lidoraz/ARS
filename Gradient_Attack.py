@@ -157,7 +157,6 @@ def generate_fake_ratings_keras(model, n_fake_users, n_movies, attack_input):
     adv_l=None; obj_l=None; reg_l=None
     for i in range(5):
         # every epoch the values will get updated in attack input, under all_rating column
-
         for batch in get_batches(attack_input + [indexes], batch_size):
             b_users, b_items, b_ratings, b_indexes = batch[:, 0], batch[:, 1], batch[:, 2], batch[:, 3].astype(
                 'int')
@@ -230,7 +229,7 @@ def run_experiment(exp_params, global_exp_params):
     MAL_EPOCHS = global_exp_params['MAL_EPOCHS']
     n_users = global_exp_params['n_users']
     n_movies = global_exp_params['n_movies']
-    plot = False
+    plot = True
     model_name = global_exp_params['model_name']
     print('Started...')
     model, best_hr, best_ndcg = load_base_model(n_fake_users, DATASET_NAME, CONVERT_BINARY, model_name=model_name)
@@ -242,7 +241,8 @@ def run_experiment(exp_params, global_exp_params):
         attack_rating_prob = generate_fake_ratings_keras(model, n_fake_users, n_movies, attack_input)
     attack_df_filtered, poison_amount = filter_ratings_by_treshold(attack_users, attack_items, attack_rating_prob, threshold)
     if plot:
-        plot_interations(attack_df_filtered, DATASET_NAME, 2, 'Attack')
+        # plot_interations(attack_df_filtered, DATASET_NAME, 2, 'Attack')
+        plot_interations(attack_df_filtered, DATASET_NAME, 2, threshold)
     # ATTACK EVALUATION
     mal_training_set = add_negative_samples(attack_df_filtered, n_movies, num_negatives)
     attack_benign_training_set = mix_attack_df_with_training_set(mal_training_set, train_set_subset)
@@ -263,14 +263,15 @@ def main():
 
     train_frac_list = [0.01]
     n_exp_users = 20
-    n_exp_tresholds = 10
-    # n_fake_user_list = [2, 4, 8 , 16, 32, 64, 128, 256]
+    n_exp_tresholds = 12
+    # n_fake_user_list = [2, 4, 8 , 16, 32, 64, 128]
     n_fake_user_list = [16]
     DATASET_NAME = 'movielens100k'
     # test_types = ['grad', 'random']
-    test_types = ['random']
-    model_name = 'simple_cf'
-    plot = False
+    test_types = ['grad']
+    # model_name = 'simple_cf'
+    model_name = 'NeuMF'
+    plot = True
     CONVERT_BINARY = True
     # test_type = 'grad'
     # DATASET_NAME = 'movielens1m'
@@ -278,12 +279,12 @@ def main():
     df = get_from_dataset_name(DATASET_NAME, CONVERT_BINARY)
     data = Data(seed=42)
     train_set, test_set, n_users, n_movies = data.pre_processing(df, test_percent=1)
-    # tresholds_list = np.linspace(2, n_movies//10, n_exp_tresholds).astype(int)
-    tresholds_list = [500] # cant be larger than n_movies
+    tresholds_list = np.linspace(2, n_movies//9, n_exp_tresholds).astype(int)
+    # tresholds_list = [500] # cant be larger than n_movies
 
     if plot:
         plot_interactions_neg(train_set, DATASET_NAME, atleast=2, title='Full Training_set')
-
+    # TODO: when model does not exists, there is a bug, - use amount of users that does not exists yet - 256 fake users will create this bug
     for ii, train_frac in enumerate(train_frac_list):
         train_set_subset = create_subset(train_set, train_frac, DATASET_NAME, Constants.unique_subset_id)
         global_exp_params = {

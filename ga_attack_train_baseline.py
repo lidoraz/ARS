@@ -13,7 +13,11 @@ def get_weights(n_fake_users, DATASET_NAME, model_name = 'NeuMF'):
     metrics_path = f'{Constants.BASE_MODEL_DIR}/{params_name}_metrics.json'
     weights_path = f'{Constants.BASE_MODEL_DIR}/{params_name}_w.h5'
 
-    assert os.path.exists(model_path), f'Model does not exists at: {model_path}'
+
+    if not os.path.exists(model_path):
+        print(f'Model does not exists at: {model_path}')
+        train_base_model(model_name, n_fake_users, DATASET_NAME, True, model_path, metrics_path, weights_path)
+
     with open(metrics_path, 'r') as metrics_file:
         # model = load_base_model(n_fake_users)
         metrics = json.load(metrics_file)
@@ -56,7 +60,7 @@ def train_base_model(model_name, n_fake_users, DATASET_NAME, CONVERT_BINARY, mod
     """
     best model according to the evalute process, in terms of HR and NDCG
     """
-    train_set, test_set, n_users, n_movies = get_train_test_set(DATASET_NAME, CONVERT_BINARY, Constants.SEED)
+    train_set, test_set, n_users, n_movies, user_item_matrix_reindexed = get_train_test_set(DATASET_NAME, CONVERT_BINARY, Constants.SEED)
     n_users_w_mal = n_users + n_fake_users + 1
 
     batch_size = 512

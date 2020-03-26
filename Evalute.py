@@ -25,7 +25,7 @@ np.random.seed(SEED)
 
 
 def baseline_train_evalute_model(model, train_set, test_set, batch_size=512, epochs=5):
-    from tensorflow.keras.models import clone_model
+    from keras.models import clone_model
     best_hr = 0
     best_ndcg = 0
     best_epoch = 0
@@ -52,7 +52,7 @@ def baseline_train_evalute_model(model, train_set, test_set, batch_size=512, epo
     return models[best_epoch], best_hr, best_ndcg
 
 
-def pert_train_evaluate_model(model, train_set, test_set, batch_size=512, epochs=5, verbose= 0):
+def pert_train_evaluate_model(model, train_set, test_set, batch_size=512, epochs=5, user_item_matrix_reindexed = None, verbose= 0):
     best_hr = 1
     best_ndcg = 1
     best_epoch = 0
@@ -64,6 +64,8 @@ def pert_train_evaluate_model(model, train_set, test_set, batch_size=512, epochs
                          labels,  # labels
                          batch_size=batch_size, verbose=0, shuffle=True)
         t2 = time()
+
+        
         mean_hr, mean_ndcg, time_eval = evaluate_model(model, test_set, verbose=0)
 
         if verbose > 1:
@@ -78,6 +80,10 @@ def pert_train_evaluate_model(model, train_set, test_set, batch_size=512, epochs
     gc.collect()
 
     return best_epoch, best_hr, best_ndcg
+
+
+
+def calc_appx_matrix(model, user_item_matrix):
 
 
 def evaluate_model(model, test_set, k=10, verbose=1):

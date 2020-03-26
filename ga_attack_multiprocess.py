@@ -10,6 +10,7 @@ from tensorboardX import SummaryWriter
 from Constants import *
 from ga_attack_train_baseline import get_weights
 
+os.environ['CUDA_VISIBLE_DEVICES'] = '-1'
 os.environ['RUN_MODE'] = '4'
 os.environ['KMP_DUPLICATE_LIB_OK'] = 'True'
 os.environ['KMP_WARNINGS'] = '0'
@@ -74,9 +75,11 @@ def get_fitness_single(agent, train_set, attack_params, model):
     attack_benign_training_set = concat_and_shuffle(malicious_training_set, train_set)
     best_pert_model, best_pert_hr, best_pert_ndcg = pert_train_evaluate_model(model, attack_benign_training_set,
                                                                               attack_params['test_set'],
+
                                                                               batch_size=batch_size,
                                                                               epochs=Constants.MODEL_P_EPOCHS,
                                                                               # pert_model_take_best=PERT_MODEL_TAKE_BEST,
+                                                                              user_item_matrix_reindexed=attack_params['user_item_matrix_reindexed'],
                                                                               verbose=VERBOSE)
     t5 = time()
     delta_hr = attack_params['best_base_hr'] - best_pert_hr
@@ -88,16 +91,16 @@ def get_fitness_single(agent, train_set, attack_params, model):
         beign_malicious_ratio = len(train_set[0]) / len(malicious_training_set[0])
         print(f'id:{agent.id}\tratio:{beign_malicious_ratio:0.2f}\tage:{agent.age}\tΔhr:{delta_hr:0.4f}\tΔndcg:{delta_ndcg:0.4f}\tf:{agent_fitness:0.4f}\ttotal_time={t5-t0:0.1f}s')
 
-    return agent_fitness
+    return agent_fitness, delta_ndcg
 
  # An example for running the model and evaluating using leave-1-out and top-k using hit ratio and NCDG metrics
 def main(n_fake_users=10, selection= 'TOURNAMENT', pop_size= 500, pos_ratio= 0.06, max_pos_ratio=0.12, crossover_type='items',
-         train_frac=0.01, n_generations= 100, n_processes= 4, save_dir= 'agents', out_log=True, save=True):
-
-    out_params = f'm{selection}_u{n_fake_users}_pop{pop_size}_c{crossover_type}_t{train_frac}_r{pos_ratio}'
+         train_frac=0.01, n_generations= 100, n_processes= 4, save_dir= 'agents', out_log=True, save=True, dataset=ml100k):
+    DATASET_NAME = dataset
+    out_params = f'd_{DATASET_NAME}_m{selection}_u{n_fake_users}_pop{pop_size}_c{crossover_type}_t{train_frac}_r{pos_ratio}'
     logger = get_logger(f'exp_{out_params}', out_log)
     # selection = 'ROULETTE' # selection = 'ROULETTE'
-    train_set, test_set, n_users, n_movies = get_train_test_set(DATASET_NAME, CONVERT_BINARY)
+    train_set, test_set, n_users, n_movies, user_item_matrix_reindexed = get_train_test_set(DATASET_NAME, CONVERT_BINARY)
     weights_path, best_hr, best_ndcg = get_weights(n_fake_users, DATASET_NAME)
     logger.info(f'Trained Base model: n_real_users={n_users}\tn_movies={n_movies}\nBaseline Metrics: best_hr={best_hr:0.4f}\tbest_ndcg={best_ndcg:0.4f}')
 
@@ -125,6 +128,7 @@ def main(n_fake_users=10, selection= 'TOURNAMENT', pop_size= 500, pos_ratio= 0.0
     agents = ga.init_agents(n_fake_users, n_movies)
 
     attack_params = {'n_users': n_users, 'n_movies': n_movies, 'best_base_hr': best_hr, 'best_base_ndcg': best_ndcg,
+                     'user_item_matrix_reindexed': user_item_matrix_reindexed,
                      'n_fake_users': n_fake_users, 'test_set': test_set, 'dataset_name': DATASET_NAME, 'convert_binary': True}
     fitness_pool = FitnessProcessPool(attack_params, n_processes)
 
@@ -140,6 +144,9 @@ def main(n_fake_users=10, selection= 'TOURNAMENT', pop_size= 500, pos_ratio= 0.0
 
         if found_new_best and save:
             ga.save(agents, n_fake_users, train_frac, cur_generation, selection, save_dir=save_dir)
+            dhr, dncdg = ga.get_best_agent(agents)
+            with open(f'ga_results/result_{DATASET_NAME}_{selection}_{n_fake_users}_{train_frac}', 'w') as f:
+                f.write(f'{dhr},{dncdg}')
 
         if selection == 'RANDOM':  # random attack - every g the pop will be restarted
             agents = ga.init_agents(n_fake_users, n_movies)
@@ -149,6 +156,8 @@ def main(n_fake_users=10, selection= 'TOURNAMENT', pop_size= 500, pos_ratio= 0.0
         agents = ga.mutation(agents)
 
     fitness_pool.terminate()
+    # Save data related to agents
+
 
 if __name__ == '__main__':
     fire.Fire(main)
