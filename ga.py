@@ -265,21 +265,30 @@ class FakeUserGeneticAlgorithm:
         return agents
 
     def get_stats_writer(self, agents, cur_generation):
+        """
+        watch correlation between increase in fit, to an increase in delta hr
+        :param agents:
+        :param cur_generation:
+        :return:
+        """
         # Gather all the fitnesses in one list and print the stats
         fits = [ind.fitness for ind in agents]
-
+        hrs = [ind.fitness for ind in agents]
         length = len(agents)
         mean = sum(fits) / length
         sum2 = sum(x * x for x in fits)
         std = abs(sum2 / length - mean ** 2) ** 0.5
         max_fit = max(fits)
         min_fit = min(fits)
-
         best_agent_id = np.argmax(fits)
+        max_dhr = agents[best_agent_id].delta_hr
+        max_ndcg = agents[best_agent_id].delta_ndcg
         found_new_best = False
         if max_fit > self.best_max_fit:
             self.best_max_fit = max_fit
             self.best_max_fit_g = cur_generation
+            self.best_max_hr = agents[best_agent_id].delta_hr
+            self.best_max_ndcg = agents[best_agent_id].delta_ndcg
             self.best_max_mean_rating_ratio = np.max(agents[best_agent_id].gnome.mean(axis=1))
             # print(np.max(agents[best_agent_id].gnome.mean(axis=1)))
             found_new_best = True
@@ -287,11 +296,15 @@ class FakeUserGeneticAlgorithm:
         
         if self.tb:
             self.tb.add_scalar('max_fit', max_fit, cur_generation)
-            self.tb.add_scalar('max_pos_ratio', max_mean_rating_ratio, cur_generation)
+            self.tb.add_scalar('max_dhr', max_dhr, cur_generation)
+            self.tb.add_scalar('max_ndcg', max_ndcg, cur_generation)
             self.tb.add_scalar('best_max_fit', self.best_max_fit, cur_generation)
-            self.tb.add_scalar('best_max_pos_ratio', self.best_max_mean_rating_ratio, cur_generation)
-            # _DropInHR
-            self.tb.add_scalar('%DropInHR', self.best_max_fit / self.baseline_fit, cur_generation)
+            self.tb.add_scalar('%DropInLogLoss', self.best_max_fit / self.baseline_fit, cur_generation)
+            self.tb.add_scalar('best_max_hr', self.best_max_hr, cur_generation)
+            self.tb.add_scalar('best_max_ndcg', self.best_max_ndcg, cur_generation)
+
+            self.tb.add_scalar('max_pos_ratio', max_mean_rating_ratio, cur_generation)
+
             # tb.add_scalar('HRPercentDrop', best_max_fit/baseline_fit, cur_generation)
             self.tb.add_scalar('min_fit', min_fit, cur_generation)
             self.tb.add_scalar('mean_fit', mean, cur_generation)
@@ -315,7 +328,7 @@ class FakeUserGeneticAlgorithm:
     @staticmethod
     def get_best_agent(agents):
         sorted(agents, key=lambda x: x.fitness, reverse=True)
-        return agents[0].fitness, agents[0].delta_ndcg
+        return agents[0].fitness, agents[0].delta_hr, agents[0].delta_ndcg
 
 
     def print_stats(self, agents, n_created, cur_generation):

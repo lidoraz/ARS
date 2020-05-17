@@ -10,7 +10,10 @@ from tensorboardX import SummaryWriter
 from Constants import *
 from ga_attack_train_baseline import get_weights
 
-os.environ['CUDA_VISIBLE_DEVICES'] = '-1'
+
+os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"   # see issue #152
+os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
+
 os.environ['RUN_MODE'] = '4'
 os.environ['KMP_DUPLICATE_LIB_OK'] = 'True'
 os.environ['KMP_WARNINGS'] = '0'
@@ -60,6 +63,7 @@ def get_logger(logger_name, save_logger):
 
 
 def get_fitness_single(agent, train_set, attack_params, model):
+    VERBOSE = 1
     """
     Main function used to create attack per agent
     Cannot run concurrently
@@ -73,25 +77,29 @@ def get_fitness_single(agent, train_set, attack_params, model):
                                                                  n_users=attack_params['n_users'], num_negatives=4)
 
     attack_benign_training_set = concat_and_shuffle(malicious_training_set, train_set)
-    best_pert_model, best_pert_hr, best_pert_ndcg = pert_train_evaluate_model(model, attack_benign_training_set,
+    best_epoch, best_log_loss, best_MSE, best_pert_hr, best_pert_ndcg = pert_train_evaluate_model(model, attack_benign_training_set,
                                                                               attack_params['test_set'],
 
                                                                               batch_size=batch_size,
                                                                               epochs=Constants.MODEL_P_EPOCHS,
                                                                               # pert_model_take_best=PERT_MODEL_TAKE_BEST,
                                                                               user_item_matrix_reindexed=attack_params['user_item_matrix_reindexed'],
+                                                                              all_users_items_pairs=attack_params['all_users_items_pairs'],
                                                                               verbose=VERBOSE)
     t5 = time()
-    delta_hr = attack_params['best_base_hr'] - best_pert_hr
-    delta_ndcg = attack_params['best_base_ndcg'] - best_pert_ndcg
-    agent_fitness = max(delta_hr, 0)
+    # after change loss should be higher
+    delta_log_loss = best_log_loss - attack_params['baseline_log_loss']
 
-    # agent_fitness = (2 * delta_hr * delta_ndcg) / (delta_hr + delta_ndcg)  # harmonic mean between deltas
+    delta_hr = attack_params['baseline_base_hr'] - best_pert_hr
+    delta_ndcg = attack_params['baseline_base_ndcg'] - best_pert_ndcg
+    agent_fitness = max(delta_log_loss, 0)
+
+
     if VERBOSE:
         beign_malicious_ratio = len(train_set[0]) / len(malicious_training_set[0])
-        print(f'id:{agent.id}\tratio:{beign_malicious_ratio:0.2f}\tage:{agent.age}\tΔhr:{delta_hr:0.4f}\tΔndcg:{delta_ndcg:0.4f}\tf:{agent_fitness:0.4f}\ttotal_time={t5-t0:0.1f}s')
+        print(f'id:{agent.id}\tratio:{beign_malicious_ratio:0.2f}\tage:{agent.age}\tΔlog_loss:{delta_log_loss:.4f}\tΔhr:{delta_hr:0.4f}\tΔndcg:{delta_ndcg:0.4f}\tf:{agent_fitness:0.4f}\ttotal_time={t5-t0:0.1f}s')
 
-    return agent_fitness, delta_ndcg
+    return agent_fitness, delta_hr, delta_ndcg
 
  # An example for running the model and evaluating using leave-1-out and top-k using hit ratio and NCDG metrics
 def main(n_fake_users=10, selection= 'TOURNAMENT', pop_size= 500, pos_ratio= 0.06, max_pos_ratio=0.12, crossover_type='items',
@@ -124,11 +132,22 @@ def main(n_fake_users=10, selection= 'TOURNAMENT', pop_size= 500, pos_ratio= 0.0
     }
     [logger.info(f'{key}={value}') for key, value in ga_params.items()]
 
-    ga = FakeUserGeneticAlgorithm(ga_params, tb, baseline=best_hr)
+    from itertools import product
+    from Evalute import calc_appx_matrix
+
+    users = user_item_matrix_reindexed.shape[0]
+    items = user_item_matrix_reindexed.shape[1]
+    all_users_items_pairs = list(zip(*product(np.arange(users), np.arange(
+        items))))  # array of 2 lists of all product (used to evulate binary cross entropy before and after attack)
+    # mse_before, log_loss_before = calc_appx_matrix(model, user_item_matrix_reindexed, all_users_items_pairs)
+    baseline_mse = 0.05101278915346433
+    baseline_log_loss = 0.16610312890970502
+    ga = FakeUserGeneticAlgorithm(ga_params, tb, baseline=baseline_log_loss)
     agents = ga.init_agents(n_fake_users, n_movies)
 
-    attack_params = {'n_users': n_users, 'n_movies': n_movies, 'best_base_hr': best_hr, 'best_base_ndcg': best_ndcg,
-                     'user_item_matrix_reindexed': user_item_matrix_reindexed,
+    attack_params = {'n_users': n_users, 'n_movies': n_movies, 'baseline_base_hr': best_hr, 'baseline_base_ndcg': best_ndcg,
+                     'user_item_matrix_reindexed': user_item_matrix_reindexed, 'all_users_items_pairs': all_users_items_pairs,
+                     'baseline_log_loss': baseline_log_loss, 'baseline_mse': baseline_mse,
                      'n_fake_users': n_fake_users, 'test_set': test_set, 'dataset_name': DATASET_NAME, 'convert_binary': True}
     fitness_pool = FitnessProcessPool(attack_params, n_processes)
 
@@ -144,9 +163,9 @@ def main(n_fake_users=10, selection= 'TOURNAMENT', pop_size= 500, pos_ratio= 0.0
 
         if found_new_best and save:
             ga.save(agents, n_fake_users, train_frac, cur_generation, selection, save_dir=save_dir)
-            dhr, dncdg = ga.get_best_agent(agents)
-            with open(f'ga_results/result_{DATASET_NAME}_{selection}_{n_fake_users}_{train_frac}', 'w') as f:
-                f.write(f'{dhr},{dncdg}')
+            fitness, dhr, dncdg = ga.get_best_agent(agents)
+            with open(f'ga_results/result_new_{DATASET_NAME}_{selection}_{n_fake_users}_{train_frac}', 'w') as f:
+                f.write(f'{fitness},{dhr},{dncdg}')
 
         if selection == 'RANDOM':  # random attack - every g the pop will be restarted
             agents = ga.init_agents(n_fake_users, n_movies)

@@ -193,7 +193,7 @@ def train_attack_evalute_keras(model, attack_benign_training_set, test_set, batc
     # attack_benign_training_set = concat_and_shuffle(malicious_training_set, train_set)
     mean_hr, mean_ndcg, time_eval = evaluate_model(model, test_set, verbose=0)
     print('evaluate_model:', mean_hr, mean_ndcg, time_eval)
-    best_pert_model, best_pert_hr, best_pert_ndcg = pert_train_evaluate_model(model, attack_benign_training_set,
+    best_epoch, best_log_loss, best_MSE, best_pert_hr, best_pert_ndcg = pert_train_evaluate_model(model, attack_benign_training_set,
                                                                               test_set,
                                                                               batch_size=batch_size,
                                                                               epochs=mal_epochs,

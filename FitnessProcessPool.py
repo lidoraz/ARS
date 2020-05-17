@@ -30,8 +30,8 @@ class FitnessProcessPool:
             try:
                 idx, agent, train_set = in_agents_queue.get(block=True)  # block on lock, wait for data
                 model.set_weights(model_base_weights)
-                agent_fitness, delta_ndcg = get_fitness_single(agent, train_set, attack_params, model)
-                out_fitness_queue.put((idx, (agent_fitness, delta_ndcg)))
+                agent_fitness, delta_hr, delta_ndcg = get_fitness_single(agent, train_set, attack_params, model)
+                out_fitness_queue.put((idx, (agent_fitness, delta_hr, delta_ndcg)))
             except Empty:  # Empty Exception
                 process_status.put(pid)
     ################################################
@@ -69,9 +69,10 @@ class FitnessProcessPool:
                 self.in_agents_queue.put((idx, agent, training_set))
                 n_in_queue += 1
 
-        for i in range(n_in_queue):  # wait on queue for a fitness result
-            idx, (agent_fitness, delta_ndcg) = self.out_fitness_queue.get(block=True)
+        for _ in range(n_in_queue):  # wait on queue for a fitness result
+            idx, (agent_fitness, delta_hr, delta_ndcg) = self.out_fitness_queue.get(block=True)
             agents[idx].fitness = agent_fitness
+            agents[idx].delta_hr = delta_hr
             agents[idx].delta_ndcg = delta_ndcg
             agents[idx].evaluted = True
 

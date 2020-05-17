@@ -52,12 +52,20 @@ def baseline_train_evalute_model(model, train_set, test_set, batch_size=512, epo
     return models[best_epoch], best_hr, best_ndcg
 
 
-def pert_train_evaluate_model(model, train_set, test_set, batch_size=512, epochs=5, user_item_matrix_reindexed = None, verbose= 0):
+def pert_train_evaluate_model(model, train_set, test_set, batch_size=512, epochs=5,
+                              user_item_matrix_reindexed = None, all_users_items_pairs=None, verbose= 0):
     best_hr = 1
+    best_log_loss = 0
     best_ndcg = 1
     best_epoch = 0
+    best_MSE = 1e+10
     user_input, item_input, labels = train_set
-    # mean_hr, mean_ndcg, time_eval = evaluate_model(model, test_set, verbose=2)
+    from itertools import product
+    from Evalute import calc_appx_matrix
+
+    users = user_item_matrix_reindexed.shape[0]
+    items = user_item_matrix_reindexed.shape[1]
+    mean_hr, mean_ndcg, time_eval = evaluate_model(model, test_set, verbose=0)
     for epoch in range(epochs):
         t1 = time()
         loss = model.fit([user_input, item_input],  # input
@@ -65,26 +73,33 @@ def pert_train_evaluate_model(model, train_set, test_set, batch_size=512, epochs
                          batch_size=batch_size, verbose=0, shuffle=True)
         t2 = time()
 
-        
+        mse, log_loss = calc_appx_matrix(model, user_item_matrix_reindexed, all_users_items_pairs)
         mean_hr, mean_ndcg, time_eval = evaluate_model(model, test_set, verbose=0)
+        t3 = time()
+        verbose = 1
+        if verbose > 0:
+            print(f'Iteration: {(epoch+1)} Fit = {log_loss:.4f}, HR = {mean_hr:.4f}, NDCG = {mean_ndcg:.4f}, Fit:[{(t2-t1):.1f}]s, Eval:[{(t3-t2):.1f}s]')
 
-        if verbose > 1:
-            print('Iteration: %d Fit:[%.1f s]: HR = %.4f, NDCG = %.4f, loss = %.4f, Eval:[%.1f s]'
-                  % (epoch + 1, t2 - t1, mean_hr, mean_ndcg, loss.history['loss'][0], time_eval))
         # TODO: CHANGED HERE FOR ATLEAST 2 EPOCHS, takeing the first epoch does not change because learning rate is small
-        # take here worst hr value.
-        if mean_hr < best_hr:
+        # take here worst loss value.
+        if log_loss > best_log_loss:
+            best_log_loss = log_loss
             best_hr = mean_hr
             best_ndcg = mean_ndcg
+            best_MSE = mse
             best_epoch = epoch
     gc.collect()
 
-    return best_epoch, best_hr, best_ndcg
+    return best_epoch, best_log_loss, best_MSE, best_hr, best_ndcg
 
 
 
-def calc_appx_matrix(model, user_item_matrix):
-
+def calc_appx_matrix(model, user_item_matrix, all_users_items_pairs):
+    y_hat = model.predict(all_users_items_pairs, batch_size= int(1e+6))
+    y_true = user_item_matrix.values.flatten()
+    from sklearn.metrics import mean_squared_error
+    from sklearn.metrics import log_loss
+    return mean_squared_error(y_true, y_hat), log_loss(y_true, y_hat)
 
 def evaluate_model(model, test_set, k=10, verbose=1):
     t0 = time()
@@ -118,18 +133,18 @@ def eval_one_rating(model, idx, user_list, negatives_list, k):
     return (hr, ndcg)
 
 
-def get_hit_ratio_shilling(ranklist, shilling_item_ids):
-    for item in shilling_item_ids:
-        if item in ranklist:
-            return 1
-    return 0
+# def get_hit_ratio_shilling(ranklist, shilling_item_ids):
+#     for item in shilling_item_ids:
+#         if item in ranklist:
+#             return 1
+#     return 0
 
 
-def get_ndcg_shilling(ranklist, shilling_item_ids):
-    for i in range(len(ranklist)):
-        if ranklist[i] in shilling_item_ids:
-            return math.log(2) / math.log(i + 2)
-    return 0
+# def get_ndcg_shilling(ranklist, shilling_item_ids):
+#     for i in range(len(ranklist)):
+#         if ranklist[i] in shilling_item_ids:
+#             return math.log(2) / math.log(i + 2)
+#     return 0
 
 
 def getHitRatio(ranklist, gtItem):
